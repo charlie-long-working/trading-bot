@@ -1,0 +1,23 @@
+# Trading-bot: dashboard + crawler/strategy (Binance data + macro/regime)
+# Usage:
+#   docker compose up -d              # run dashboard at http://localhost:5000
+#   docker compose run --rm bot python crawl_binance_klines.py --market-type spot --symbols BTCUSDT --interval 1h --start 2024-01-01 --end 2025-03-15 --out-dir /data
+#   docker compose run --rm bot python run_telegram_signal.py
+#   docker compose run --rm bot python run_backtest.py
+
+services:
+  bot:
+    build: .
+    image: trading-bot:latest
+    container_name: trading-bot
+    ports:
+      - "5000:5000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=5000
+    env_file:
+      - .env
+    volumes:
+      # Persist klines and on-chain cache
+      - ./data:/app/data
+    restart: unless-stopped

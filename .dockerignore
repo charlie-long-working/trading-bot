@@ -1,0 +1,30 @@
+# Virtual env and caches
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+
+# Data and secrets (mount at runtime)
+data/
+*.zip
+.env
+.env.*
+!.env.example
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+*.md
+!README.md
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Docs and plans (optional: remove if you want them in image)
+docs/
+*.plan.md
