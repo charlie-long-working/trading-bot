@@ -1,0 +1,47 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// MA200 + Chênh lệch giá với MA200 theo %
+
+//@version=5
+indicator("MA200 & Chênh lệch %", overlay=true, max_labels_count=1)
+
+// ═══════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════
+
+i_period = input.int(200, "Chu kỳ MA", group="MA200", minval=2)
+i_maColor = input.color(color.new(color.blue, 0), "Màu MA200", group="MA200")
+i_maWidth = input.int(2, "Độ dày MA200", group="MA200", minval=1, maxval=4)
+
+i_showTable = input.bool(true, "Hiện bảng % chênh lệch", group="Hiển thị")
+i_tablePos = input.string("top_right", "Vị trí bảng", group="Hiển thị", options=["top_left", "top_center", "top_right", "bottom_left", "bottom_center", "bottom_right"])
+
+// ═══════════════════════════════════════════════════════════════════════
+// MA200 & % chênh lệch
+// ═══════════════════════════════════════════════════════════════════════
+
+ma200 = ta.sma(close, i_period)
+// Chênh lệch %: (giá - MA200) / MA200 * 100
+pctDev = ma200 != 0 ? (close - ma200) / ma200 * 100.0 : float(na)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Vẽ MA200 trên chart
+// ═══════════════════════════════════════════════════════════════════════
+
+plot(ma200, "MA200", color=i_maColor, linewidth=i_maWidth)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Bảng hiển thị % chênh lệch
+// ═══════════════════════════════════════════════════════════════════════
+
+pos = i_tablePos == "top_left" ? position.top_left : i_tablePos == "top_center" ? position.top_center : i_tablePos == "top_right" ? position.top_right : i_tablePos == "bottom_left" ? position.bottom_left : i_tablePos == "bottom_center" ? position.bottom_center : position.bottom_right
+var table tbl = table.new(pos, 2, 3, bgcolor=color.new(color.black, 85), border_width=1, border_color=color.new(color.gray, 70))
+
+if i_showTable and barstate.islast
+    table.cell(tbl, 0, 0, "MA200", text_color=color.gray, text_size=size.small)
+    table.cell(tbl, 1, 0, str.tostring(ma200, "#.##"), text_color=color.white, text_size=size.small)
+    table.cell(tbl, 0, 1, "Chênh lệch %", text_color=color.gray, text_size=size.small)
+    pctStr = na(pctDev) ? "—" : str.tostring(pctDev, "#.##") + "%"
+    pctColor = na(pctDev) ? color.gray : pctDev >= 0 ? color.new(color.green, 20) : color.new(color.red, 20)
+    table.cell(tbl, 1, 1, pctStr, text_color=pctColor, text_size=size.normal)
+    table.cell(tbl, 0, 2, "Giá", text_color=color.gray, text_size=size.small)
+    table.cell(tbl, 1, 2, str.tostring(close, "#.##"), text_color=color.white, text_size=size.small)

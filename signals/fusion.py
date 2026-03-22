@@ -57,6 +57,7 @@ def get_signal(
     zone_lookback: int = 50,
     sopr: Optional[float] = None,
     mvrv: Optional[float] = None,
+    m2_yoy: Optional[float] = None,
 ) -> SignalResult:
     """
     Compute current bar signal from regime + technical.
@@ -65,12 +66,12 @@ def get_signal(
     - Long: regime allows long (bull or sideways) + price at bullish OB / bullish FVG / demand zone.
     - Short: regime allows short (bear or sideways) + price at bearish OB / bearish FVG / supply zone.
     - If require_volume_confirmation=True, entry also requires volume >= volume_sma.
-    - sopr/mvrv: optional on-chain values for current bar (e.g. from Glassnode); passed to RegimeInputs.
+    - sopr/mvrv/m2_yoy: optional on-chain and macro (e.g. Glassnode, FRED); passed to RegimeInputs.
     """
     if regime_classifier is None:
         regime_classifier = RegimeClassifier()
     regime = regime_classifier.classify(
-        RegimeInputs(close=close, high=high, low=low, sopr=sopr, mvrv=mvrv)
+        RegimeInputs(close=close, high=high, low=low, sopr=sopr, mvrv=mvrv, m2_yoy=m2_yoy)
     )
     rules = get_rules_for_regime(regime)
     last_close = float(close[-1])

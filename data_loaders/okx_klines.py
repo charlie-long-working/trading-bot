@@ -8,8 +8,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from exchange.okx_client import OKXClient, OKXConfig, INTERVAL_TO_BAR
-from exchange.okx_client import _symbol_to_inst_id
+from exchange.okx_client import OKXClient, INTERVAL_TO_BAR, _symbol_to_inst_id
 
 
 def fetch_okx_klines(

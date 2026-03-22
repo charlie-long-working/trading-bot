@@ -16,6 +16,7 @@ from strategy import RegimeClassifier, RegimeInputs, get_rules_for_regime
 from strategy.timeline import halving_phase, is_weak_seasonal_month
 
 from .load_klines import load_merged_klines
+from .realtime import load_klines_with_realtime_fallback
 from .glassnode import load_sopr_mvrv_for_klines, get_onchain_for_bar
 
 
@@ -50,6 +51,7 @@ def make_decision(
     interval: str,
     classifier: Optional[RegimeClassifier] = None,
     use_onchain: bool = True,
+    use_realtime_fallback: bool = False,
 ) -> Optional[MarketContext]:
     """
     Load klines, compute regime and timeline, return a single MarketContext for decision-making.
@@ -58,9 +60,15 @@ def make_decision(
     - favor: long if regime allows long and is bull/sideways; short if bear/sideways allows short; else neutral.
     - halving_phase: from last bar's date.
     - seasonal_weak: true if last bar's month is in weak seasonal set.
+    - use_realtime_fallback: nếu True, khi không có file thì lấy từ Binance REST API.
     """
     data_dir = Path(data_dir)
-    out = load_merged_klines(data_dir, market_type, symbol, interval)
+    if use_realtime_fallback:
+        out = load_klines_with_realtime_fallback(
+            data_dir, market_type, symbol, interval, limit=500
+        )
+    else:
+        out = load_merged_klines(data_dir, market_type, symbol, interval)
     if out is None:
         return None
     open_time, open_, high, low, close, volume = out

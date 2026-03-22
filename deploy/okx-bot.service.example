@@ -1,0 +1,26 @@
+# Systemd unit cho OKX bot chạy 24/7.
+#
+# Cách dùng:
+#   1. Copy vào hệ thống: sudo cp deploy/okx-bot.service.example /etc/systemd/system/okx-bot.service
+#   2. Sửa User, WorkingDirectory, ExecStart cho đúng path và user trên VPS.
+#   3. sudo systemctl daemon-reload && sudo systemctl enable okx-bot && sudo systemctl start okx-bot
+#   4. Xem log: sudo journalctl -u okx-bot -f
+#
+# Xem thêm: docs/DEPLOY_OKX_BOT.md
+
+[Unit]
+Description=OKX Trading Bot (regime + fusion)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botokx
+WorkingDirectory=/home/botokx/Trading-bot
+Environment=PATH=/home/botokx/Trading-bot/.venv/bin:/usr/bin
+ExecStart=/home/botokx/Trading-bot/.venv/bin/python run_okx_bot.py --symbols BTCUSDT,ETHUSDT --market swap --size-usdt 100 --interval-minutes 60
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

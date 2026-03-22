@@ -1,0 +1,103 @@
+// Neutral Bot Index (0-100)
+// Dùng để bật/tắt bot neutral (grid/range) khi thị trường "sideways" và volatility đang co lại.
+//
+// Ý tưởng:
+// - MA ngắn và MA dài gần nhau => trend yếu
+// - Volatility contraction (stdev giảm so với giai đoạn trước) => dễ sideway/mean-reversion
+// - (Tùy chọn) khoảng cách giá so với MA200 không quá xa => tránh đoạn trend mạnh
+
+//@version=5
+indicator("Neutral Bot Index (0-100)", overlay=true, max_labels_count=1)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Inputs
+// ═══════════════════════════════════════════════════════════════════════
+
+g_regime = "Regime (MA)"
+i_shortMa    = input.int(20, "MA ngắn", group=g_regime, minval=1)
+i_longMa     = input.int(50, "MA dài", group=g_regime, minval=1)
+i_volPeriod  = input.int(20, "Chu kỳ volatility (stdev)", group=g_regime, minval=2)
+
+g_filter = "Filter"
+i_maxSpreadPct = input.float(1.0, "MA spread tối đa (%)", group=g_filter, minval=0.05, step=0.05)
+i_maxVolRatio  = input.float(0.8, "Vol contraction ratio tối đa", group=g_filter, minval=0.05, step=0.05)
+i_minVolRatio  = input.float(0.2, "Vol ratio tối thiểu (score 100)", group=g_filter, minval=0.05, step=0.05)
+
+i_useMa200Filter     = input.bool(true, "Dùng MA200 filter", group=g_filter)
+i_ma200Period        = input.int(200, "MA200 period", group=g_filter, minval=2)
+i_maxMa200DistPct   = input.float(10.0, "Khoảng cách tới MA200 tối đa (%)", group=g_filter, minval=0.5, step=0.5)
+
+g_score = "Điểm Neutral"
+i_threshold = input.float(70.0, "Ngưỡng NeutralScore", group=g_score, minval=0, maxval=100, step=1)
+
+g_show = "Hiển thị"
+i_showMA = input.bool(true, "Vẽ MA (short/long/200)", group=g_show)
+i_showBg = input.bool(true, "Nền khi Neutral ON", group=g_show)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════
+
+f_clamp(_x, _min, _max) =>
+    math.max(_min, math.min(_max, _x))
+
+// ═══════════════════════════════════════════════════════════════════════
+// Core: trend weak + volatility contraction
+// ═══════════════════════════════════════════════════════════════════════
+
+shortMa = ta.sma(close, i_shortMa)
+longMa  = ta.sma(close, i_longMa)
+
+spreadPct = longMa != 0 ? math.abs(shortMa - longMa) / longMa * 100.0 : na
+
+recentStd = ta.stdev(close, i_volPeriod)
+prevStd   = ta.stdev(close[i_volPeriod], i_volPeriod)
+volRatio  = prevStd > 0 ? recentStd / prevStd : na
+
+volContracting = not na(volRatio) and volRatio <= i_maxVolRatio
+
+// MA spread score: spreadPct càng nhỏ => score càng cao
+trendScore = not na(spreadPct) ? f_clamp(100.0 * (1.0 - spreadPct / i_maxSpreadPct), 0.0, 100.0) : 0.0
+
+// Vol score: volRatio gần i_minVolRatio => 100, còn sát i_maxVolRatio => 0
+// Nếu volRatio vượt i_maxVolRatio => score thấp về 0.
+volScore = not na(volRatio) ? f_clamp(100.0 * (i_maxVolRatio - volRatio) / math.max(i_maxVolRatio - i_minVolRatio, 0.0001), 0.0, 100.0) : 0.0
+
+// Optional MA200 filter: giá càng gần MA200 => điểm càng cao (để tránh trend mạnh)
+ma200 = ta.sma(close, i_ma200Period)
+ma200DistPct = not na(ma200) and ma200 != 0 ? math.abs(close - ma200) / ma200 * 100.0 : na
+ma200Score = i_useMa200Filter and not na(ma200DistPct) ? f_clamp(100.0 * (1.0 - ma200DistPct / i_maxMa200DistPct), 0.0, 100.0) : 50.0
+
+// NeutralScore: trọng số cân bằng
+neutralScore = 0.45 * trendScore + 0.35 * volScore + 0.20 * ma200Score
+neutralMode = neutralScore >= i_threshold and volContracting
+
+// ═══════════════════════════════════════════════════════════════════════
+// Plots / Alerts
+// ═══════════════════════════════════════════════════════════════════════
+
+plot(i_showMA ? shortMa : na, "MA short", color=color.new(color.aqua, 0), linewidth=2)
+plot(i_showMA ? longMa  : na, "MA long",  color=color.new(color.orange, 0), linewidth=2)
+plot(i_showMA and i_useMa200Filter ? ma200 : na, "MA200", color=color.new(color.blue, 0), linewidth=2)
+
+plot(neutralScore, "NeutralScore", color=neutralMode ? color.new(color.lime, 0) : color.new(color.red, 0), linewidth=2)
+hline(i_threshold, "Neutral threshold", color=color.new(color.gray, 60))
+
+bgcolor(i_showBg and neutralMode ? color.new(color.lime, 88) : na)
+
+// Alert để bật bot neutral thủ công hoặc qua webhook bên bạn.
+alertcondition(neutralMode, "Neutral ON", "Neutral Bot Index: ON (sideways + volatility contracting)")
+alertcondition(not neutralMode, "Neutral OFF", "Neutral Bot Index: OFF")
+
+// Bảng thông tin cuối nến
+var table t = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 85), border_width=1)
+if barstate.islast
+    table.cell(t, 0, 0, "NeutralScore", text_color=color.gray)
+    table.cell(t, 1, 0, str.tostring(neutralScore, "#.0"), text_color=neutralMode ? color.lime : color.red)
+    table.cell(t, 0, 1, "MA spread %", text_color=color.gray)
+    table.cell(t, 1, 1, na(spreadPct) ? "—" : str.tostring(spreadPct, "#.##"), text_color=color.white)
+    table.cell(t, 0, 2, "Vol ratio", text_color=color.gray)
+    table.cell(t, 1, 2, na(volRatio) ? "—" : str.tostring(volRatio, "#.###"), text_color=color.white)
+    table.cell(t, 0, 3, "Mode", text_color=color.gray)
+    table.cell(t, 1, 3, neutralMode ? "NEUTRAL ON" : "NEUTRAL OFF", text_color=neutralMode ? color.lime : color.red)
+

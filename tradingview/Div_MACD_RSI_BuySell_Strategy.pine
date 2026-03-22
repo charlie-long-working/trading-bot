@@ -1,0 +1,138 @@
+// MACD/RSI Divergence Strategy (Buy on green, Sell on red)
+// - Triangles: MACD divergence
+// - Circles: RSI divergence
+// Entry/Exit rules (configurable):
+// - Bullish (green): price lower-low + MACD/RSI higher-low (pivot-based)
+// - Bearish (red): price higher-high + MACD/RSI lower-high (pivot-based)
+
+//@version=5
+strategy(
+     "Div MACD/RSI Strategy (Buy/Sell)",
+     overlay=true,
+     pyramiding=0,
+     initial_capital=10000,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     process_orders_on_close=true,
+     calc_on_every_tick=false)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Inputs
+// ═══════════════════════════════════════════════════════════════════════
+
+g_div = "Divergence"
+i_pivotLeft = input.int(5, "Pivot left bars", group=g_div, minval=1)
+i_pivotRight = input.int(5, "Pivot right bars (confirmation)", group=g_div, minval=1)
+
+i_macdFast = input.int(12, "MACD fast", group=g_div, minval=1)
+i_macdSlow = input.int(26, "MACD slow", group=g_div, minval=2)
+i_macdSignal = input.int(9, "MACD signal", group=g_div, minval=1)
+
+i_rsiLen = input.int(14, "RSI length", group=g_div, minval=2)
+
+i_mode = input.string("Any", "Bull/Bear logic",
+     options=["Any", "Both"], group=g_div,
+     tooltip="Any = (MACD bull OR RSI bull) -> Long; (MACD bear OR RSI bear) -> Sell. Both = requires both MACD and RSI divergence.")
+
+i_allowShort = input.bool(true, "Allow Short (futures-like)", group="Orders")
+i_useCloseOnSellOnly = input.bool(false, "If ON: sell closes long but does not open short", group="Orders",
+     tooltip="When Allow Short=true, this controls whether bearish divergence opens short or only closes long.")
+
+// ═══════════════════════════════════════════════════════════════════════
+// Indicators
+// ═══════════════════════════════════════════════════════════════════════
+
+left = i_pivotLeft
+right = i_pivotRight
+
+[macdLine, _, _] = ta.macd(close, i_macdFast, i_macdSlow, i_macdSignal)
+rsi = ta.rsi(close, i_rsiLen)
+
+// Pivot helpers (pivot confirmed at current bar, value is right bars ago)
+plPrice = ta.pivotlow(low, left, right)
+phPrice = ta.pivothigh(high, left, right)
+
+// Store previous pivots for divergence detection (price pivots + indicator values at those pivots)
+var float prevPLPrice_macd = na
+var float prevPLMacd = na
+var float prevPHPrice_macd = na
+var float prevPHMacd = na
+
+var float prevPLPrice_rsi = na
+var float prevPLRsi = na
+var float prevPHPrice_rsi = na
+var float prevPHRsi = na
+
+// Signals
+bullDivMacd = false
+bearDivMacd = false
+bullDivRsi = false
+bearDivRsi = false
+
+// Bullish divergence on pivot lows:
+// price: lower low
+// macd: higher low (at the corresponding pivot bar)
+if not na(plPrice)
+    macdAtPL = macdLine[right]
+    rsiAtPL = rsi[right]
+
+    bullDivMacd := not na(prevPLPrice_macd) and plPrice < prevPLPrice_macd and not na(macdAtPL) and macdAtPL > prevPLMacd
+    prevPLPrice_macd := plPrice
+    prevPLMacd := macdAtPL
+
+    bullDivRsi := not na(prevPLPrice_rsi) and plPrice < prevPLPrice_rsi and not na(rsiAtPL) and rsiAtPL > prevPLRsi
+    prevPLPrice_rsi := plPrice
+    prevPLRsi := rsiAtPL
+
+// Bearish divergence on pivot highs:
+// price: higher high
+// macd: lower high
+if not na(phPrice)
+    macdAtPH = macdLine[right]
+    rsiAtPH = rsi[right]
+
+    bearDivMacd := not na(prevPHPrice_macd) and phPrice > prevPHPrice_macd and not na(macdAtPH) and macdAtPH < prevPHMacd
+    prevPHPrice_macd := phPrice
+    prevPHMacd := macdAtPH
+
+    bearDivRsi := not na(prevPHPrice_rsi) and phPrice > prevPHPrice_rsi and not na(rsiAtPH) and rsiAtPH < prevPHRsi
+    prevPHPrice_rsi := phPrice
+    prevPHRsi := rsiAtPH
+
+// ═══════════════════════════════════════════════════════════════════════
+// Buy/Sell mapping: green=buy, red=sell
+// ═══════════════════════════════════════════════════════════════════════
+
+buyBullMacd = bullDivMacd
+buyBullRsi = bullDivRsi
+sellBearMacd = bearDivMacd
+sellBearRsi = bearDivRsi
+
+buyCond = i_mode == "Both" ? (buyBullMacd and buyBullRsi) : (buyBullMacd or buyBullRsi)
+sellCond = i_mode == "Both" ? (sellBearMacd and sellBearRsi) : (sellBearMacd or sellBearRsi)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Orders
+// ═══════════════════════════════════════════════════════════════════════
+
+// Entry Long on bull divergence
+if buyCond
+    strategy.entry("Long", strategy.long)
+
+// Exit/Short on bear divergence
+if sellCond
+    if i_allowShort and not i_useCloseOnSellOnly
+        strategy.entry("Short", strategy.short)
+    else
+        strategy.close("Long")
+
+// ═══════════════════════════════════════════════════════════════════════
+// Visual debug (optional)
+// ═══════════════════════════════════════════════════════════════════════
+
+plotshape(bullDivMacd, "MACD Bull", style=shape.triangleup, location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="MACD", textcolor=color.black, offset=-right)
+plotshape(bearDivMacd, "MACD Bear", style=shape.triangledown, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny, text="MACD", textcolor=color.black, offset=-right)
+
+plotshape(bullDivRsi, "RSI Bull", style=shape.circle, location=location.belowbar, color=color.new(color.lime, 0), size=size.tiny, text="RSI", textcolor=color.black, offset=-right)
+plotshape(bearDivRsi, "RSI Bear", style=shape.circle, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny, text="RSI", textcolor=color.black, offset=-right)
+

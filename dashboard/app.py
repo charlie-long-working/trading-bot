@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 from flask import Flask, jsonify, render_template_string, request
 
 from data_loaders.load_klines import load_merged_klines
+from data_loaders.realtime import load_klines_with_realtime_fallback
 from data_loaders.decision import make_decision
 from backtest.engine import run_backtest
 from dashboard.decision_timeline import build_decision_timeline
@@ -46,7 +47,10 @@ def api_context():
     market = request.args.get("market", "spot")
     symbol = request.args.get("symbol", "BTCUSDT")
     interval = request.args.get("interval", "1d")
-    ctx = make_decision(str(DATA_DIR), market, symbol, interval)
+    use_realtime = request.args.get("realtime", "").lower() in ("1", "true", "yes")
+    ctx = make_decision(
+        str(DATA_DIR), market, symbol, interval, use_realtime_fallback=use_realtime
+    )
     if ctx is None:
         return jsonify({"error": "no data"}), 404
     return jsonify({
@@ -92,7 +96,14 @@ def api_chart():
     symbol = request.args.get("symbol", "BTCUSDT")
     interval = request.args.get("interval", "1d")
     max_bars = request.args.get("max_bars", type=int, default=500)
-    out = load_merged_klines(str(DATA_DIR), market, symbol, interval)
+    use_realtime = request.args.get("realtime", "").lower() in ("1", "true", "yes")
+    out = (
+        load_klines_with_realtime_fallback(
+            str(DATA_DIR), market, symbol, interval, limit=max_bars
+        )
+        if use_realtime
+        else load_merged_klines(str(DATA_DIR), market, symbol, interval)
+    )
     if out is None:
         return jsonify({"error": "no data"}), 404
     open_time, open_, high, low, close, volume = out
@@ -173,6 +184,7 @@ INDEX_HTML = """
     <label>Market <select id="market"><option value="spot">spot</option><option value="um">um</option></select></label>
     <label>Symbol <select id="symbol"><option value="BTCUSDT">BTCUSDT</option><option value="ETHUSDT">ETHUSDT</option></select></label>
     <label>Interval <select id="interval"><option value="1d">1d</option><option value="1h">1h</option></select></label>
+    <label><input type="checkbox" id="realtime" title="Lấy từ Binance khi không có file"> Realtime fallback</label>
     <button id="refresh">Refresh</button>
   </div>
 
@@ -204,7 +216,10 @@ INDEX_HTML = """
     const marketEl = document.getElementById('market');
     const symbolEl = document.getElementById('symbol');
     const intervalEl = document.getElementById('interval');
+    const realtimeEl = document.getElementById('realtime');
     const refreshBtn = document.getElementById('refresh');
+
+    function realtimeParam() { return realtimeEl && realtimeEl.checked ? 'realtime=1' : ''; }
     const contextEl = document.getElementById('context');
     const backtestEl = document.getElementById('backtest');
     const summaryTbody = document.querySelector('#summaryTable tbody');
@@ -217,6 +232,7 @@ INDEX_HTML = """
       if (loading) loading.textContent = 'Loading…';
       try {
         const params = { market: marketEl.value, symbol: symbolEl.value, interval: intervalEl.value };
+        if (realtimeParam()) params.realtime = '1';
         const r = await fetch('/api/context?' + qs(params));
         if (!r.ok) { contextEl.innerHTML = 'No data for this pair. Check <code>data/</code> and try spot/BTCUSDT/1d.'; return; }
         const d = await r.json();
@@ -276,6 +292,7 @@ INDEX_HTML = """
     async function loadChart() {
       try {
         const params = { market: marketEl.value, symbol: symbolEl.value, interval: intervalEl.value, max_bars: 500 };
+        if (realtimeParam()) params.realtime = '1';
         const r = await fetch('/api/chart?' + qs(params));
         if (!r.ok) { console.warn('Chart API error', r.status); return; }
         const d = await r.json();

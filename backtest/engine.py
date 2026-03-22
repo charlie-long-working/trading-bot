@@ -5,12 +5,13 @@ Uses data from 2017 to latest available (2026 if present in data).
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
 
-from strategy import RegimeClassifier, RegimeInputs, get_rules_for_regime
+from strategy import Regime, RegimeClassifier, RegimeInputs, get_rules_for_regime
 from signals.fusion import get_signal, Signal
 
 from data_loaders.load_klines import load_merged_klines
@@ -41,11 +42,25 @@ class BacktestResult:
     trades: List[Trade] = field(default_factory=list)
     equity_curve: Optional[np.ndarray] = None
     total_return_pct: float = 0.0
+    hold_return_pct: float = 0.0  # Buy-and-hold same period
     sharpe_ratio: float = 0.0
     max_drawdown_pct: float = 0.0
     win_rate: float = 0.0
     profit_factor: float = 0.0
     num_trades: int = 0
+    avg_win_pct: float = 0.0
+    avg_loss_pct: float = 0.0
+
+
+def _parse_date_to_ts_ms(date_str: Optional[str]) -> Optional[int]:
+    """Parse 'YYYY-MM-DD' to UTC timestamp in ms. None -> None."""
+    if not date_str:
+        return None
+    try:
+        dt = datetime.strptime(date_str.strip()[:10], "%Y-%m-%d")
+        return int(dt.replace(tzinfo=None).timestamp() * 1000)
+    except Exception:
+        return None
 
 
 def run_backtest(
@@ -57,14 +72,18 @@ def run_backtest(
     base_size: float = 1.0,
     require_volume_confirmation: bool = False,
     use_onchain: bool = True,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    bull_flat_hold_pct: float = 0.0,
 ) -> Optional[BacktestResult]:
     """
     Run backtest on merged klines from data_dir.
 
     - lookback: bars needed before first signal (regime + technical need history).
     - base_size: notional size per trade (1.0 = 100% of capital per trade before regime scaling).
-    - Walks bar-by-bar; at each bar computes signal on past data only; opens/closes positions by regime rules.
+    - start_date / end_date: optional "YYYY-MM-DD" to only trade in that range (inclusive); None = no limit.
     - use_onchain: if True, load SOPR/MVRV from Glassnode (or cache) and pass to regime classifier.
+    - bull_flat_hold_pct: when regime is BULL and no position, capture this fraction of bar return (0=off, 0.5=50% hold khi flat) to reduce gap vs buy-and-hold.
     """
     out = load_merged_klines(data_dir, market_type, symbol, interval)
     if out is None:
@@ -72,6 +91,23 @@ def run_backtest(
     open_time, open_, high, low, close, volume = out
     n = len(close)
     if n < lookback:
+        return None
+
+    # Lọc theo ngày: chỉ trade từ start_bar đến end_bar (open_time trong [start_ts, end_ts])
+    ot = np.asarray(open_time, dtype=np.int64)
+    if ot.size and ot[0] < 1e12:
+        ot = ot * 1000
+    start_ts = _parse_date_to_ts_ms(start_date)
+    end_ts = _parse_date_to_ts_ms(end_date)
+    i_start = 0
+    i_end = n - 1
+    if start_ts is not None:
+        idx = np.searchsorted(ot, start_ts, side="left")
+        i_start = max(lookback, min(idx, n - 1))
+    if end_ts is not None:
+        idx = np.searchsorted(ot, end_ts, side="right")
+        i_end = min(idx - 1, n - 1)
+    if i_start > i_end:
         return None
 
     sopr_arr, mvrv_arr = None, None
@@ -86,7 +122,7 @@ def run_backtest(
     equity_curve = np.ones(n)
     position: Optional[dict] = None  # {side, entry_price, entry_bar, stop, target, size_pct}
 
-    for i in range(lookback, n):
+    for i in range(i_start, i_end + 1):
         # Slice up to and including current bar (only past data)
         o = open_[: i + 1]
         h = high[: i + 1]
@@ -174,40 +210,49 @@ def run_backtest(
                     "size_pct": size_pct,
                 }
 
+            # Bull flat hold: khi bull và đang không có lệnh, vẫn hưởng một phần biến động giá (giảm thua hold)
+            if position is None and bull_flat_hold_pct > 0 and regime == Regime.BULL and i > i_start:
+                bar_return = (close[i] / close[i - 1]) - 1.0
+                equity *= 1.0 + bull_flat_hold_pct * bar_return
+
         equity_curve[i] = equity
 
-    # Close any open position at end
+    # Close any open position at end of backtest range
     if position is not None:
-        pnl_pct = (close[-1] - position["entry_price"]) / position["entry_price"] * 100
+        exit_bar = i_end
+        exit_price = close[i_end]
+        pnl_pct = (exit_price - position["entry_price"]) / position["entry_price"] * 100
         if position["side"] == "short":
             pnl_pct = -pnl_pct
         pnl_pct *= position["size_pct"]
         trades.append(
             Trade(
                 entry_bar=position["entry_bar"],
-                exit_bar=n - 1,
+                exit_bar=exit_bar,
                 side=position["side"],
                 entry_price=position["entry_price"],
-                exit_price=close[-1],
+                exit_price=exit_price,
                 pnl_pct=pnl_pct,
                 exit_reason="end",
             )
         )
         equity *= 1 + pnl_pct / 100
-        equity_curve[-1] = equity
+        equity_curve[exit_bar] = equity
 
     # Metrics
     total_return_pct = (equity - 1.0) * 100
+    hold_return_pct = float((close[i_end] / close[i_start] - 1.0) * 100) if close[i_start] != 0 else 0.0
     if not trades:
         return BacktestResult(
             symbol=symbol,
             market_type=market_type,
             interval=interval,
-            start_bar=lookback,
-            end_bar=n - 1,
+            start_bar=i_start,
+            end_bar=i_end,
             trades=[],
             equity_curve=equity_curve,
             total_return_pct=total_return_pct,
+            hold_return_pct=hold_return_pct,
             num_trades=0,
         )
 
@@ -218,6 +263,8 @@ def run_backtest(
     gross_profit = np.sum(wins) if len(wins) else 0
     gross_loss = abs(np.sum(losses)) if len(losses) else 1e-12
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
+    avg_win_pct = float(np.mean(wins)) if len(wins) else 0.0
+    avg_loss_pct = float(np.mean(losses)) if len(losses) else 0.0
 
     # Sharpe: annualized from trade returns (approximate)
     if len(returns) > 1 and np.std(returns) > 0:
@@ -225,23 +272,27 @@ def run_backtest(
     else:
         sharpe_ratio = 0.0
 
-    # Max drawdown from equity curve
-    peak = np.maximum.accumulate(equity_curve[lookback:])
-    dd = (peak - equity_curve[lookback:]) / peak
+    # Max drawdown from equity curve (over backtest range)
+    curve_slice = equity_curve[i_start : i_end + 1]
+    peak = np.maximum.accumulate(curve_slice)
+    dd = (peak - curve_slice) / np.where(peak > 0, peak, 1)
     max_drawdown_pct = float(np.max(dd) * 100) if len(dd) else 0
 
     return BacktestResult(
         symbol=symbol,
         market_type=market_type,
         interval=interval,
-        start_bar=lookback,
-        end_bar=n - 1,
+        start_bar=i_start,
+        end_bar=i_end,
         trades=trades,
         equity_curve=equity_curve,
         total_return_pct=total_return_pct,
+        hold_return_pct=hold_return_pct,
         sharpe_ratio=sharpe_ratio,
         max_drawdown_pct=max_drawdown_pct,
         win_rate=win_rate,
         profit_factor=profit_factor,
         num_trades=len(trades),
+        avg_win_pct=avg_win_pct,
+        avg_loss_pct=avg_loss_pct,
     )

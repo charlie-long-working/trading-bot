@@ -9,26 +9,51 @@ Cấu hình:
 Chạy:
   python run_okx_bot.py --symbols BTCUSDT,ETHUSDT --market swap --paper
   python run_okx_bot.py --symbols BTCUSDT --market swap --size-usdt 100
+  python run_okx_bot.py --symbols BTCUSDT --market swap --size-usdt 100 --interval-minutes 60   # chạy mỗi 60 phút (daemon)
 """
 
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv(ROOT / ".env")
-except ImportError:
-    pass
+def _load_env_file():
+    """Nạp .env từ thư mục project (và cwd) vào os.environ."""
+    try:
+        from dotenv import load_dotenv
+        for path in (ROOT / ".env", Path.cwd() / ".env"):
+            if path.exists():
+                load_dotenv(path)
+    except ImportError:
+        pass
+    # Fallback: đọc trực tiếp .env nếu OKX_* vẫn trống (tránh lỗi dotenv/encoding)
+    if not os.environ.get("OKX_API_KEY", "").strip():
+        for path in (ROOT / ".env", Path.cwd() / ".env"):
+            if path.exists():
+                try:
+                    with open(path, "r", encoding="utf-8-sig") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#") and "=" in line:
+                                k, _, v = line.partition("=")
+                                k, v = k.strip(), v.strip().strip('"').strip("'")
+                                if k in ("OKX_API_KEY", "OKX_SECRET_KEY", "OKX_PASSPHRASE", "OKX_DEMO"):
+                                    os.environ.setdefault(k, v)
+                except Exception:
+                    pass
+                break
+
+
+_load_env_file()
 
 from exchange.okx_client import OKXClient, OKXConfig, _symbol_to_inst_id
 from data_loaders.okx_klines import fetch_okx_klines
-from signals.current_signal import get_current_signal_with_tp_sl_from_arrays
+from signals.okx_signal import get_okx_signal
 
 
 def _parse_env() -> OKXConfig:
@@ -36,9 +61,22 @@ def _parse_env() -> OKXConfig:
     secret = os.environ.get("OKX_SECRET_KEY", "").strip()
     phrase = os.environ.get("OKX_PASSPHRASE", "").strip()
     demo = os.environ.get("OKX_DEMO", "").strip().lower() in ("1", "true", "yes")
-    if not key or not secret or not phrase:
+    missing = []
+    if not key:
+        missing.append("OKX_API_KEY")
+    if not secret:
+        missing.append("OKX_SECRET_KEY")
+    if not phrase:
+        missing.append("OKX_PASSPHRASE")
+    if missing:
+        env_path = ROOT / ".env"
         raise SystemExit(
-            "Cần cấu hình OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSPHRASE trong .env. Xem docs/HUONG_DAN_BOT_OKX.md"
+            f"Thiếu trong .env: {', '.join(missing)}.\n"
+            f"Kiểm tra file {env_path} có đúng 3 dòng (không dấu cách thừa):\n"
+            "  OKX_API_KEY=...\n"
+            "  OKX_SECRET_KEY=...\n"
+            "  OKX_PASSPHRASE=...\n"
+            "Xem docs/HUONG_DAN_BOT_OKX.md"
         )
     return OKXConfig(api_key=key, secret_key=secret, passphrase=phrase, demo=demo)
 
@@ -73,6 +111,12 @@ def main():
     parser.add_argument("--size-usdt", type=float, default=100.0, help="Size mỗi lệnh (USDT)")
     parser.add_argument("--paper", action="store_true", help="Chỉ in lệnh, không gửi OKX")
     parser.add_argument("--dry-run", action="store_true", help="Alias của --paper")
+    parser.add_argument(
+        "--interval-minutes",
+        type=float,
+        default=0,
+        help="Chạy lặp mỗi N phút (0 = chạy 1 lần rồi thoát). Dùng để bot chạy 24/7 trên VPS.",
+    )
     args = parser.parse_args()
 
     paper = args.paper or args.dry_run
@@ -81,7 +125,23 @@ def main():
 
     config = _parse_env()
     client = OKXClient(config)
+    if config.demo:
+        print("(Chế độ DEMO: API key từ tài khoản Demo OKX — lệnh dùng số dư demo)")
 
+    run_count = 0
+    while True:
+        run_count += 1
+        if args.interval_minutes > 0 and run_count > 1:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Chu kỳ #{run_count} — kiểm tra tín hiệu...")
+        _run_one_cycle(client, config, symbols, market_type, args, paper)
+        if args.interval_minutes <= 0:
+            break
+        sec = int(args.interval_minutes * 60)
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Chờ {args.interval_minutes:.0f} phút đến chu kỳ tiếp theo...")
+        time.sleep(sec)
+
+
+def _run_one_cycle(client, config, symbols, market_type, args, paper):
     for symbol in symbols:
         try:
             klines = fetch_okx_klines(
@@ -99,13 +159,14 @@ def main():
             print(f"[{symbol}] Không có dữ liệu nến", file=sys.stderr)
             continue
         open_time, open_, high, low, close, volume = klines
-        sig = get_current_signal_with_tp_sl_from_arrays(
-            open_, high, low, close, volume,
+        sig = get_okx_signal(
+            open_time, open_, high, low, close, volume,
             symbol=symbol,
             market_type=market_type,
             interval=args.interval,
             sopr=None,
             mvrv=None,
+            use_timeline_modifier=True,
         )
         if sig is None:
             print(f"[{symbol}] Không có tín hiệu Long/Short")
@@ -114,13 +175,15 @@ def main():
         inst_id = _symbol_to_inst_id(symbol, market_type)
         entry = sig.entry
         side = "buy" if sig.side == "long" else "sell"
-        sz = _size_to_sz(market_type, symbol, args.size_usdt, entry)
+        size_usdt = args.size_usdt * sig.position_size_modifier
+        sz = _size_to_sz(market_type, symbol, size_usdt, entry)
         td_mode = "cash" if market_type == "spot" else "cross"
 
         if paper:
+            mod = f" (size_mod={sig.position_size_modifier})" if sig.position_size_modifier < 1.0 else ""
             print(
                 f"[PAPER] {symbol} {sig.side.upper()} | instId={inst_id} | entry≈{entry:.2f} | "
-                f"SL={sig.sl:.2f} | TP={sig.tp or 'trend'} | sz={sz} | regime={sig.regime}"
+                f"SL={sig.sl:.2f} | TP={sig.tp or 'trend'} | sz={sz} | regime={sig.regime}{mod}"
             )
             continue
 

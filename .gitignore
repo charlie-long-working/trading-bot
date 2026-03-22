@@ -1,9 +1,14 @@
 .venv/
 __pycache__/
 *.pyc
-data/
+# Root klines/cache only — keep vre/data/ for Vietnam CSVs & small caches
+/data/
 *.zip
 .env
+.DS_Store
+.cursor/
+# Large downloaded kline caches (regenerate locally)
+botv2/data/cache/
 # Docker
 .docker/
 *.log

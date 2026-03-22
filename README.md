@@ -147,6 +147,10 @@ SOPR and MVRV are loaded from the **Glassnode API** (or from cached CSV) and pas
 2. **Cache:** First run with API key saves `data/onchain/BTC/sopr.csv`, `mvrv.csv` (and same for ETH). Later runs can use cache only.
 3. **Symbols:** Only **BTCUSDT** and **ETHUSDT** are mapped to Glassnode assets (BTC, ETH). Other pairs run without on-chain.
 
+### Realtime data
+
+Để lấy dữ liệu realtime (không dùng crawler), xem **[docs/REALTIME_DATA.md](docs/REALTIME_DATA.md)** – hướng dẫn Binance REST API, WebSocket, TradingView, OKX và các nguồn khác.
+
 ---
 
 ## Dashboard GUI (tracking and view)

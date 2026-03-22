@@ -1,0 +1,255 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// © Regime Fusion — Strategy: Regime + Order Blocks + FVG + Supply/Demand + Volume
+//
+// Backtest strategy version of `Regime_Fusion_Signals.pine`
+// - LONG when `longCond`
+// - SHORT when `shortCond`
+// - Uses same SL/TP rules as indicator and submits orders to TradingView strategy engine.
+
+//@version=5
+strategy(
+     "Regime Fusion - Backtest Strategy",
+     overlay=true,
+     pyramiding=0,
+     process_orders_on_close=true,
+     initial_capital=10000,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     calc_on_every_tick=false)
+
+// ═══════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════
+
+// Regime
+g_regime = "Regime (MA)"
+i_shortMa    = input.int(20, "MA ngắn", group=g_regime, minval=1)
+i_longMa     = input.int(50, "MA dài", group=g_regime, minval=1)
+i_volPeriod  = input.int(20, "Chu kỳ volatility", group=g_regime, minval=1)
+
+// Order Block
+g_ob = "Order Block"
+i_obLookback = input.int(50, "Lookback", group=g_ob, minval=5)
+i_obMoveBars = input.int(5, "Số nến xác nhận move", group=g_ob, minval=1)
+i_obMinPct   = input.float(0.5, "Min move %", group=g_ob, minval=0.1, step=0.1)
+
+// Fair Value Gap
+g_fvg = "Fair Value Gap"
+i_fvgLookback = input.int(30, "Lookback", group=g_fvg, minval=3)
+
+// Supply / Demand
+g_zone = "Supply / Demand"
+i_zoneLookback   = input.int(50, "Lookback", group=g_zone, minval=5)
+i_zoneBaseBars  = input.int(3, "Số nến base", group=g_zone, minval=2)
+i_zoneExpansion = input.float(0.3, "Expansion %", group=g_zone, minval=0.1, step=0.1)
+
+// Filters
+g_filter = "Bộ lọc"
+i_maxZoneBars   = input.int(20, "Max tuổi vùng (bars)", group=g_filter, minval=5, maxval=100)
+i_tolerancePct = input.float(0.1, "Tolerance % (price at zone)", group=g_filter, minval=0.01, step=0.05)
+i_volumeConfirm = input.bool(false, "Bắt buộc volume >= SMA(20)", group=g_filter)
+
+// Orders
+g_orders = "Orders"
+i_allowShort = input.bool(true, "Cho phép SHORT", group=g_orders)
+i_showMA = input.bool(true, "Vẽ MA (tuỳ chọn)", group=g_orders)
+
+// SL/TP drawing is removed in strategy (strategy tester handles PnL).
+
+// ═══════════════════════════════════════════════════════════════════════
+// REGIME
+// ═══════════════════════════════════════════════════════════════════════
+
+shortMa = ta.sma(close, i_shortMa)
+longMa  = ta.sma(close, i_longMa)
+recentStd = ta.stdev(close, i_volPeriod)
+prevStd   = ta.stdev(close[i_volPeriod], i_volPeriod)
+volContracting = prevStd > 0 and recentStd < prevStd * 0.8
+
+isBull = shortMa > longMa and not volContracting
+isBear = shortMa < longMa
+
+allowLong  = isBull or (not isBear)   // Bull hoặc Sideways
+allowShort = isBear or (not isBull)   // Bear hoặc Sideways
+
+// ═══════════════════════════════════════════════════════════════════════
+// VOLUME
+// ═══════════════════════════════════════════════════════════════════════
+
+volSma = ta.sma(volume, 20)
+volOk  = not i_volumeConfirm or (volume >= volSma)
+
+// ═══════════════════════════════════════════════════════════════════════
+// ORDER BLOCKS
+// ═══════════════════════════════════════════════════════════════════════
+
+float bullObHigh = na
+float bullObLow  = na
+float bearObHigh = na
+float bearObLow  = na
+
+obMaxJ = math.min(i_obLookback - 1, i_maxZoneBars)
+if bar_index >= i_obLookback + i_obMoveBars
+    for j = i_obMoveBars to obMaxJ
+        o_j = open[j]
+        h_j = high[j]
+        l_j = low[j]
+        c_j = close[j]
+        bearish = c_j <= o_j or math.abs(c_j - o_j) < o_j * 0.001
+        bool strongUp = false
+        for k = 1 to i_obMoveBars
+            if close[j - k] >= h_j * (1 + i_obMinPct / 100)
+                strongUp := true
+                break
+        tol = (h_j - l_j) * (i_tolerancePct / 100)
+        if bearish and strongUp and close <= h_j + tol and close >= l_j - tol
+            bullObHigh := h_j
+            bullObLow  := l_j
+            break
+
+    for j = i_obMoveBars to obMaxJ
+        o_j = open[j]
+        h_j = high[j]
+        l_j = low[j]
+        c_j = close[j]
+        bullish = c_j > o_j or math.abs(c_j - o_j) < o_j * 0.001
+        bool strongDn = false
+        for k = 1 to i_obMoveBars
+            if close[j - k] <= l_j * (1 - i_obMinPct / 100)
+                strongDn := true
+                break
+        tol = (h_j - l_j) * (i_tolerancePct / 100)
+        if bullish and strongDn and close <= h_j + tol and close >= l_j - tol
+            bearObHigh := h_j
+            bearObLow  := l_j
+            break
+
+atBullOb = not na(bullObHigh)
+atBearOb = not na(bearObHigh)
+
+// ═══════════════════════════════════════════════════════════════════════
+// FAIR VALUE GAPS (3 nến)
+// ═══════════════════════════════════════════════════════════════════════
+
+float bullFvgTop = na
+float bullFvgBot = na
+float bearFvgTop = na
+float bearFvgBot = na
+
+fvgMaxJ = math.min(i_fvgLookback - 1, i_maxZoneBars)
+if bar_index >= i_fvgLookback
+    for j = 2 to fvgMaxJ
+        if high[j] < low[j - 2]
+            top = low[j - 2]
+            bot = high[j]
+            tol = (top - bot) * (i_tolerancePct / 100)
+            if close >= bot - tol and close <= top + tol
+                bullFvgTop := top
+                bullFvgBot := bot
+                break
+
+    for j = 2 to fvgMaxJ
+        if low[j] > high[j - 2]
+            top = low[j]
+            bot = high[j - 2]
+            tol = (top - bot) * (i_tolerancePct / 100)
+            if close >= bot - tol and close <= top + tol
+                bearFvgTop := top
+                bearFvgBot := bot
+                break
+
+atBullFvg = not na(bullFvgTop)
+atBearFvg = not na(bearFvgTop)
+
+// ═══════════════════════════════════════════════════════════════════════
+// SUPPLY / DEMAND ZONES
+// ═══════════════════════════════════════════════════════════════════════
+
+float demandTop = na
+float demandBot = na
+float supplyTop = na
+float supplyBot = na
+
+zoneMaxJ = math.min(i_zoneLookback - 1, i_maxZoneBars)
+if bar_index >= i_zoneLookback + i_zoneBaseBars
+    for j = i_zoneBaseBars to zoneMaxJ
+        baseHigh = math.max(high[j], math.max(high[j-1], high[j-2]))
+        baseLow  = math.min(low[j], math.min(low[j-1], low[j-2]))
+        mid = (baseHigh + baseLow) / 2
+        if mid > 0
+            expClose = close[j - i_zoneBaseBars]
+            if (expClose - baseHigh) / mid * 100 >= i_zoneExpansion
+                tol = (baseHigh - baseLow) * (i_tolerancePct / 100)
+                if close >= baseLow - tol and close <= baseHigh + tol
+                    demandTop := baseHigh
+                    demandBot  := baseLow
+                    break
+
+    for j = i_zoneBaseBars to zoneMaxJ
+        baseHigh = math.max(high[j], math.max(high[j-1], high[j-2]))
+        baseLow  = math.min(low[j], math.min(low[j-1], low[j-2]))
+        mid = (baseHigh + baseLow) / 2
+        if mid > 0
+            expClose = close[j - i_zoneBaseBars]
+            if (baseLow - expClose) / mid * 100 >= i_zoneExpansion
+                tol = (baseHigh - baseLow) * (i_tolerancePct / 100)
+                if close >= baseLow - tol and close <= baseHigh + tol
+                    supplyTop := baseHigh
+                    supplyBot  := baseLow
+                    break
+
+atDemand = not na(demandTop)
+atSupply = not na(supplyTop)
+
+// ═══════════════════════════════════════════════════════════════════════
+// FUSION SIGNALS
+// ═══════════════════════════════════════════════════════════════════════
+
+longSignal  = allowLong and volOk and (atBullOb or atBullFvg or atDemand)
+shortSignal = allowShort and volOk and (atBearOb or atBearFvg or atSupply)
+
+longCond  = longSignal and not longSignal[1]
+shortCond = shortSignal and not shortSignal[1]
+
+// ═══════════════════════════════════════════════════════════════════════
+// SL / TP (same rules as indicator)
+// ═══════════════════════════════════════════════════════════════════════
+
+float longSl  = na
+float longTp  = na
+float shortSl = na
+float shortTp = na
+
+if longCond
+    longSl := atBullOb ? bullObLow : (atBullFvg ? bullFvgBot : (atDemand ? demandBot : close * (1 - (isBear ? 0.02 : (isBull ? 0.03 : 0.015)))))
+    longTp := isBull ? na : (isBear ? close * 1.03 : close * 1.02)
+
+if shortCond
+    shortSl := atBearOb ? bearObHigh : (atBearFvg ? bearFvgTop : (atSupply ? supplyTop : close * (1 + (isBear ? 0.02 : 0.015))))
+    shortTp := isBear ? close * 0.97 : close * 0.98
+
+// ═══════════════════════════════════════════════════════════════════════
+// Submit orders
+// ═══════════════════════════════════════════════════════════════════════
+
+// Reverse behavior: close opposite first, then enter.
+if longCond
+    strategy.close("Short")
+    strategy.entry("Long", strategy.long)
+
+    // If TP is not available (bull regime), exit only via stop.
+    if not na(longTp)
+        strategy.exit("LongExit", from_entry="Long", stop=longSl, limit=longTp)
+    else
+        strategy.exit("LongExit", from_entry="Long", stop=longSl)
+
+if shortCond and i_allowShort
+    strategy.close("Long")
+    strategy.entry("Short", strategy.short)
+
+    strategy.exit("ShortExit", from_entry="Short", stop=shortSl, limit=shortTp)
+
+// Optional MA plots
+plot(i_showMA ? shortMa : na, "MA ngắn", color=color.new(#2196F3, 0), linewidth=2)
+plot(i_showMA ? longMa : na, "MA dài", color=color.new(#FF9800, 0), linewidth=2)
+

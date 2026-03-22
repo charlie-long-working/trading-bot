@@ -9,6 +9,11 @@ from .glassnode import (
     fetch_mvrv,
     SYMBOL_TO_ASSET,
 )
+from .realtime import (
+    fetch_binance_klines,
+    fetch_binance_ticker_price,
+    load_klines_with_realtime_fallback,
+)
 
 __all__ = [
     "load_merged_klines",
@@ -20,4 +25,7 @@ __all__ = [
     "fetch_sopr",
     "fetch_mvrv",
     "SYMBOL_TO_ASSET",
+    "fetch_binance_klines",
+    "fetch_binance_ticker_price",
+    "load_klines_with_realtime_fallback",
 ]
