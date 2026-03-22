@@ -92,15 +92,30 @@ def _get_fred() -> Optional["Fred"]:
     return Fred(api_key=key)
 
 
-def _fetch_and_cache(series_id: str, fred: "Fred") -> Optional["pd.DataFrame"]:
+def _load_from_cache(series_id: str) -> Optional["pd.DataFrame"]:
+    """Load series from CSV cache only (no API). Dùng khi không có FRED_API_KEY."""
     if pd is None:
         return None
     cache_path = CACHE_DIR / f"{series_id}.csv"
-    if cache_path.exists():
+    if not cache_path.exists():
+        return None
+    try:
+        return pd.read_csv(cache_path, parse_dates=["date"])
+    except Exception:
+        return None
+
+
+def _fetch_and_cache(series_id: str, fred: Optional["Fred"] = None, force_refresh: bool = False) -> Optional["pd.DataFrame"]:
+    if pd is None:
+        return None
+    cache_path = CACHE_DIR / f"{series_id}.csv"
+    if cache_path.exists() and not force_refresh:
         try:
             return pd.read_csv(cache_path, parse_dates=["date"])
         except Exception:
             pass
+    if fred is None:
+        return _load_from_cache(series_id)
     try:
         s = fred.get_series(series_id)
         df = pd.DataFrame({"date": s.index, "value": s.values})
@@ -117,16 +132,15 @@ def load_property_comparison(force_refresh: bool = False) -> Optional["pd.DataFr
     """
     Load property price indices for developed countries (BIS 2010=100).
     Returns wide DataFrame with columns: date, US, UK, Japan, Germany, France, Korea, Advanced (avg).
+    Có thể dùng cache trong repo khi không có FRED_API_KEY (ví dụ trên Streamlit Cloud).
     """
     if pd is None:
         return None
     fred = _get_fred()
-    if fred is None:
-        return None
 
     dfs = []
     for country, sid in PROPERTY_SERIES.items():
-        df = _fetch_and_cache(sid, fred)
+        df = _fetch_and_cache(sid, fred, force_refresh=force_refresh)
         if df is not None and len(df) > 0:
             df = df.rename(columns={"value": country})
             dfs.append(df)
@@ -145,17 +159,16 @@ def load_demographics(force_refresh: bool = False) -> Dict[str, Optional["pd.Dat
     """
     Load demographic data: population, old-age dependency, working-age %.
     Returns dict: {population: df, old_dependency: df, working_age: df}
+    Có thể dùng cache khi không có FRED_API_KEY.
     """
     if pd is None:
         return {}
     fred = _get_fred()
-    if fred is None:
-        return {}
 
     def _load_category(mapping: dict) -> Optional["pd.DataFrame"]:
         dfs = []
         for country, sid in mapping.items():
-            df = _fetch_and_cache(sid, fred)
+            df = _fetch_and_cache(sid, fred, force_refresh=force_refresh)
             if df is not None and len(df) > 0:
                 df = df.rename(columns={"value": country})
                 dfs.append(df)
