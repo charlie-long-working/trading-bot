@@ -36,10 +36,10 @@ from vre.models.trend_predictor import (
 )
 
 st.set_page_config(
-    page_title="VN Real Estate & Economy",
+    page_title="BĐS & Kinh tế Việt Nam",
     page_icon="🏠",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",  # Thu gọn sidebar trên điện thoại, mở trên desktop
 )
 
 DARK_BG = "#0e1117"
@@ -47,12 +47,37 @@ CARD_BG = "#1a1c2c"
 ACCENT = "#e94560"
 ACCENT2 = "#4ade80"
 
+# Mô tả chỉ số FRED — tiếng Việt (sidebar + biểu đồ)
+VI_SERIES = {
+    "M2SL": "Cung tiền M2 (Mỹ, tỷ USD/tháng) — tiền lưu hành, ảnh hưởng lạm phát & tài sản",
+    "FEDFUNDS": "Lãi suất Fed (%, tháng) — lãi chính sách Mỹ, tác động USD & vốn toàn cầu",
+    "CPIAUCSL": "CPI Mỹ (chỉ số giá tiêu dùng, tháng) — đo lạm phát Mỹ",
+    "FPCPITOTLZGVNM": "Lạm phát Việt Nam (% so cùng kỳ năm trước, năm)",
+    "DCOILWTICO": "Giá dầu WTI (USD/thùng, ngày) — chi phí năng lượng thế giới",
+    "DTWEXBGS": "Chỉ số USD (bình quân thương mại, ngày) — USD mạnh/yếu so nhiều nước",
+}
+
+VI_GUIDE = """
+**📊 Dữ liệu thô** — Xem các chỉ số kinh tế Mỹ/thế giới (M2, lãi Fed, lạm phát, dầu, USD), chỉ số giá nhà Việt Nam (chuẩn 2015=100), giá theo m² từng vùng, lãi suất NHNN.
+
+**🔗 Tương quan** — Ma trận cho biết hai chỉ số nào “cùng chiều” hay “ngược chiều” (số gần +1 hoặc -1). Chỉ mang tính thống kê, không phải lời khuyên đầu tư.
+
+**🔮 Dự báo** — Mô hình hồi quy đơn giản so sánh giá trị thực tế và dự đoán. R² càng cao càng “khớp” dữ liệu quá khứ; vẫn có thể sai tương lai.
+
+**🏘️ Lịch sử VN** — Giá nhà theo khu vực, % tăng so năm trước, bình quân cả nước.
+
+**🌍 So sánh quốc tế** — Giá BĐS các nước (chuẩn 2010=100), tỷ lệ sinh, dân số — để đặt Việt Nam trong bối cảnh thế giới.
+
+*Nguồn: FRED, dữ liệu CSV Việt Nam. Không phải tư vấn tài chính.*
+"""
+
 
 def apply_custom_css():
     st.markdown("""
     <style>
-    .main .block-container { padding-top: 1rem; max-width: 1400px; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    /* Desktop */
+    .main .block-container { padding-top: 1rem; max-width: 1400px; padding-left: 1rem; padding-right: 1rem; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; flex-wrap: wrap; }
     .stTabs [data-baseweb="tab"] {
         background-color: #1a1c2c; border-radius: 8px 8px 0 0;
         padding: 10px 24px; font-weight: 600;
@@ -64,12 +89,41 @@ def apply_custom_css():
         background: linear-gradient(135deg, #1a1c2c 0%, #16213e 100%);
         border: 1px solid #2a2d4a; border-radius: 12px;
         padding: 20px; text-align: center;
+        min-width: 0;
     }
     .metric-card h3 { color: #8892b0; font-size: 0.85rem; margin-bottom: 4px; }
-    .metric-card .value { color: #e6f1ff; font-size: 1.8rem; font-weight: 700; }
+    .metric-card .value { color: #e6f1ff; font-size: 1.8rem; font-weight: 700; word-break: break-word; }
     .section-header {
         border-left: 4px solid #e94560; padding-left: 12px;
         margin: 24px 0 16px 0; font-size: 1.2rem; font-weight: 600;
+    }
+    /* Cột metric: tự stack trên mobile */
+    [data-testid="column"] { min-width: 0 !important; }
+    
+    /* Mobile — max-width 768px */
+    @media (max-width: 768px) {
+        .main .block-container { padding-top: 0.5rem; padding-left: 0.75rem; padding-right: 0.75rem; }
+        .stTabs [data-baseweb="tab-list"] { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+        .stTabs [data-baseweb="tab"] { padding: 8px 16px; font-size: 0.85rem; white-space: nowrap; }
+        .metric-card { padding: 14px 12px; border-radius: 10px; margin-bottom: 8px; }
+        .metric-card h3 { font-size: 0.75rem; }
+        .metric-card .value { font-size: 1.4rem !important; }
+        .section-header { font-size: 1rem; margin: 16px 0 12px 0; padding-left: 10px; }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] { width: 100% !important; flex: 0 0 100% !important; }
+        /* Sidebar: nút dễ bấm trên mobile */
+        [data-testid="stSidebar"] .stButton > button { min-height: 44px; padding: 10px 16px; }
+        /* Title nhỏ hơn */
+        h1 { font-size: 1.5rem !important; }
+        /* Plotly: giới hạn chiều cao trên mobile */
+        .js-plotly-plot { max-height: 350px !important; }
+    }
+    
+    /* Mobile nhỏ — max-width 480px */
+    @media (max-width: 480px) {
+        .main .block-container { padding-left: 0.5rem; padding-right: 0.5rem; }
+        .metric-card .value { font-size: 1.25rem !important; }
+        .stTabs [data-baseweb="tab"] { padding: 6px 12px; font-size: 0.8rem; }
+        h1 { font-size: 1.3rem !important; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -103,17 +157,17 @@ def plotly_dark_layout(fig, title=""):
     return fig
 
 
-@st.cache_data(ttl=3600, show_spinner="Loading FRED data...")
+@st.cache_data(ttl=3600, show_spinner="Đang tải dữ liệu FRED...")
 def cached_fred_series(force: bool = False):
     return get_all_series(force_refresh=force)
 
 
-@st.cache_data(ttl=3600, show_spinner="Loading FRED monthly merge...")
+@st.cache_data(ttl=3600, show_spinner="Đang gộp dữ liệu theo tháng...")
 def cached_fred_monthly(force: bool = False):
     return get_merged_monthly(force_refresh=force)
 
 
-@st.cache_data(ttl=3600, show_spinner="Building property index...")
+@st.cache_data(ttl=3600, show_spinner="Đang tính chỉ số giá BĐS...")
 def cached_property_index():
     return build_property_index()
 
@@ -133,7 +187,7 @@ def cached_vn_avg():
     return load_property_national_avg()
 
 
-@st.cache_data(ttl=3600, show_spinner="Loading comparison data...")
+@st.cache_data(ttl=3600, show_spinner="Đang tải dữ liệu so sánh...")
 def cached_property_comparison():
     return load_property_comparison()
 
@@ -144,34 +198,39 @@ def cached_demographics():
 
 
 def sidebar():
-    st.sidebar.title("🏠 VN Real Estate")
+    st.sidebar.title("🏠 BĐS & kinh tế VN")
     st.sidebar.markdown("---")
-    force = st.sidebar.button("🔄 Refresh All Data", use_container_width=True)
+    force = st.sidebar.button("🔄 Làm mới toàn bộ dữ liệu", use_container_width=True)
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Data Sources**")
+    st.sidebar.markdown("**Nguồn dữ liệu**")
     st.sidebar.markdown("""
-    - [FRED](https://fred.stlouisfed.org/) — US macro indicators
-    - SBV — VN interest rates (CSV)
-    - Local CSV — VN property prices (5 regions)
+    - [FRED](https://fred.stlouisfed.org/) — chỉ số kinh tế Mỹ/thế giới (cần API key để cập nhật mới)
+    - NHNN (SBV) — lãi suất Việt Nam (file CSV)
+    - CSV nội bộ — giá nhà theo m² (5 khu vực)
     """)
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**FRED Series**")
-    for sid, desc in SERIES.items():
+    st.sidebar.markdown("**Các mã chỉ số FRED**")
+    for sid in SERIES:
+        desc = VI_SERIES.get(sid, SERIES.get(sid, sid))
         st.sidebar.caption(f"`{sid}` — {desc}")
     return force
 
 
 def render_tab_raw_data(fred_data: dict, prop_index, vn_rates, vn_prices):
-    st.markdown('<div class="section-header">Macro Economic Indicators</div>',
+    st.markdown('<div class="section-header">Chỉ số kinh tế vĩ mô (Mỹ & thế giới)</div>',
                 unsafe_allow_html=True)
+    st.caption(
+        "M2: lượng tiền; Fed: lãi Mỹ; CPI: lạm phát; Dầu WTI: năng lượng; "
+        "Chỉ số USD: đô mạnh/yếu. Lạm phát VN: % so cùng kỳ năm trước."
+    )
 
     fred_labels = {
-        "M2SL": ("M2 Money Supply", "Billions USD"),
-        "FEDFUNDS": ("Fed Funds Rate", "%"),
-        "CPIAUCSL": ("CPI US (All Urban)", "Index"),
-        "FPCPITOTLZGVNM": ("CPI Vietnam (Inflation)", "% YoY"),
-        "DCOILWTICO": ("Oil WTI", "USD/barrel"),
-        "DTWEXBGS": ("US Dollar Index", "Index"),
+        "M2SL": ("Cung tiền M2 (Mỹ)", "tỷ USD"),
+        "FEDFUNDS": ("Lãi suất Fed", "%"),
+        "CPIAUCSL": ("CPI Mỹ (giá tiêu dùng)", "chỉ số"),
+        "FPCPITOTLZGVNM": ("Lạm phát Việt Nam", "% so cùng kỳ/năm"),
+        "DCOILWTICO": ("Giá dầu WTI", "USD/thùng"),
+        "DTWEXBGS": ("Chỉ số USD (bình quân thương mại)", "điểm"),
     }
 
     cols = st.columns(3)
@@ -188,7 +247,7 @@ def render_tab_raw_data(fred_data: dict, prop_index, vn_rates, vn_prices):
                         unsafe_allow_html=True)
 
     selected = st.selectbox(
-        "Select indicator to chart",
+        "Chọn chỉ số để xem biểu đồ",
         list(fred_data.keys()),
         format_func=lambda x: fred_labels.get(x, (x,))[0],
     )
@@ -197,67 +256,76 @@ def render_tab_raw_data(fred_data: dict, prop_index, vn_rates, vn_prices):
         label, unit = fred_labels.get(selected, (selected, ""))
         fig = px.line(df, x="date", y="value", title=f"{label} ({unit})")
         fig.update_traces(line_color=ACCENT)
-        plotly_dark_layout(fig, f"{label} — Historical")
+        plotly_dark_layout(fig, f"{label} — theo thời gian")
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown('<div class="section-header">Vietnam Property Prices</div>',
+    st.markdown('<div class="section-header">Giá nhà đất Việt Nam</div>',
                 unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
 
     with col1:
         if prop_index is not None and len(prop_index) > 0:
-            st.subheader("VN Property Price Index (base 2015 = 100)")
+            st.subheader("Chỉ số giá BĐS bình quân (mốc 2015 = 100)")
             fig = px.line(prop_index, x="date", y="value",
-                          title="National Avg Property Price Index")
+                          title="Chỉ số giá nhà bình quân cả nước")
             fig.update_traces(line_color=ACCENT2, mode="lines+markers")
             plotly_dark_layout(fig)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Property index unavailable — add data to `vre/data/vietnam/property_prices.csv`")
+            st.info("Chưa có chỉ số — bổ sung dữ liệu trong `vre/data/vietnam/property_prices.csv`")
 
     with col2:
         if vn_prices is not None and len(vn_prices) > 0:
-            st.subheader("Price per m² by Region")
+            st.subheader("Giá theo m² theo khu vực (VND)")
             regions = vn_prices["region"].unique() if "region" in vn_prices.columns else []
             if len(regions) > 0:
                 fig = px.line(vn_prices, x="date", y="price_per_m2",
                               color="region",
-                              title="Price per m² by Region")
+                              title="Giá m² theo vùng")
                 plotly_dark_layout(fig)
                 st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Local property prices: no CSV data found")
+            st.info("Chưa có file CSV giá nhà địa phương.")
 
     if vn_rates is not None and len(vn_rates) > 0:
-        st.markdown('<div class="section-header">Vietnam Interest Rates (SBV)</div>',
+        st.markdown('<div class="section-header">Lãi suất Việt Nam (NHNN)</div>',
                     unsafe_allow_html=True)
+        st.caption("Lãi tái cấp vốn / huy động — ảnh hưởng chi phí vay mua nhà.")
         rate_cols = [c for c in vn_rates.columns if "rate" in c.lower()]
         if rate_cols:
             fig = go.Figure()
             colors = [ACCENT, ACCENT2, "#fbbf24", "#818cf8"]
+            name_vi = {
+                "refinancing_rate": "Lãi tái cấp vốn",
+                "deposit_rate": "Trần lãi huy động (tham chiếu)",
+            }
             for j, col in enumerate(rate_cols):
+                nm = name_vi.get(col, col.replace("_", " ").title())
                 fig.add_trace(go.Scatter(
                     x=vn_rates["date"], y=vn_rates[col],
-                    mode="lines+markers", name=col.replace("_", " ").title(),
+                    mode="lines+markers", name=nm,
                     line=dict(color=colors[j % len(colors)]),
                 ))
-            plotly_dark_layout(fig, "Vietnam Interest Rates History")
+            plotly_dark_layout(fig, "Lịch sử lãi suất Việt Nam")
             st.plotly_chart(fig, use_container_width=True)
 
 
 def render_tab_correlation(merged):
-    st.markdown('<div class="section-header">Correlation Analysis</div>',
+    st.markdown('<div class="section-header">Phân tích tương quan</div>',
                 unsafe_allow_html=True)
+    st.caption(
+        "Hệ số gần **+1**: hai chỉ số cùng tăng/giảm; gần **-1**: ngược chiều; gần **0**: ít liên hệ. "
+        "Chỉ mang tính thống kê trên dữ liệu quá khứ."
+    )
 
     if merged is None or len(merged) < 5:
-        st.warning("Not enough merged data for correlation analysis. "
-                    "Ensure FRED data and property price data are available.")
+        st.warning("Dữ liệu gộp chưa đủ để phân tích. Cần có dữ liệu FRED và giá BĐS Việt Nam.")
         return
 
     numeric = merged.select_dtypes(include=[np.number])
     if len(numeric.columns) < 2:
-        st.warning("Not enough numeric columns for correlation.")
+        st.warning("Không đủ cột số để tính tương quan.")
         return
 
     corr = numeric.corr()
@@ -267,138 +335,148 @@ def render_tab_correlation(merged):
         text_auto=".2f",
         color_continuous_scale="RdBu_r",
         zmin=-1, zmax=1,
-        title="Correlation Matrix — All Indicators",
+        title="Ma trận tương quan — tất cả chỉ số",
         aspect="auto",
     )
-    plotly_dark_layout(fig, "Correlation Matrix")
+    plotly_dark_layout(fig, "Ma trận tương quan")
     fig.update_layout(height=600)
     st.plotly_chart(fig, use_container_width=True)
 
     if "property_index" in numeric.columns:
-        st.markdown('<div class="section-header">Lagged Correlations vs Property Index</div>',
+        st.markdown('<div class="section-header">Tương quan trễ so với chỉ số giá BĐS</div>',
                     unsafe_allow_html=True)
+        st.caption("So sánh chỉ số giá nhà với các yếu tố vĩ mô (có thể lệch thời gian).")
         corr_table = compute_correlations(merged)
         if corr_table is not None:
             st.dataframe(corr_table.set_index("feature"), use_container_width=True)
 
-        st.markdown('<div class="section-header">Scatter Plots vs Property Index</div>',
+        st.markdown('<div class="section-header">Biểu đồ phân tán: chỉ số giá BĐS</div>',
                     unsafe_allow_html=True)
         feature_cols = [c for c in numeric.columns if c != "property_index"]
-        sel_feat = st.selectbox("Select feature for scatter", feature_cols)
+        sel_feat = st.selectbox("Chọn chỉ số để so với giá BĐS", feature_cols)
         if sel_feat:
             fig = px.scatter(
                 merged.reset_index(), x=sel_feat, y="property_index",
                 trendline="ols",
-                title=f"Property Index vs {sel_feat}",
+                title=f"Chỉ số giá BĐS theo {sel_feat}",
             )
             plotly_dark_layout(fig)
             st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Property index column not found. Add VN property data to see correlations.")
+        st.info("Chưa có cột chỉ số giá BĐS. Thêm dữ liệu giá nhà Việt Nam để xem tương quan.")
 
         feature_cols = list(numeric.columns)
         if len(feature_cols) >= 2:
             c1, c2 = st.columns(2)
             with c1:
-                x_col = st.selectbox("X axis", feature_cols, index=0)
+                x_col = st.selectbox("Trục ngang (X)", feature_cols, index=0)
             with c2:
-                y_col = st.selectbox("Y axis", feature_cols,
+                y_col = st.selectbox("Trục dọc (Y)", feature_cols,
                                      index=min(1, len(feature_cols) - 1))
             if x_col and y_col:
                 fig = px.scatter(
                     merged.reset_index(), x=x_col, y=y_col,
                     trendline="ols",
-                    title=f"{y_col} vs {x_col}",
+                    title=f"{y_col} theo {x_col}",
                 )
                 plotly_dark_layout(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
 
 def render_tab_prediction(analysis_result):
-    st.markdown('<div class="section-header">Trend Prediction Model</div>',
+    st.markdown('<div class="section-header">Mô hình dự báo xu hướng (tham khảo)</div>',
                 unsafe_allow_html=True)
+    st.caption(
+        "**R²**: độ khớp với dữ liệu quá khứ (0–1, càng cao càng khớp). "
+        "**MAE**: sai số trung bình. Mô hình tuyến tính đơn giản — không đảm bảo dự báo đúng tương lai."
+    )
 
     if analysis_result is None:
-        st.warning("No analysis result available.")
+        st.warning("Chưa có kết quả phân tích.")
         return
 
     model_res = analysis_result.get("model_result")
     if model_res is None:
-        st.warning("Could not build regression model. "
-                    "Need property index + at least 2 macro features with >=10 data points.")
-        st.info("Ensure the following data is available:\n"
-                "1. VN property prices (CSV or BIS)\n"
-                "2. FRED macro data (M2, Fed rate, CPI, etc.)\n"
-                "3. VN interest rates (CSV)")
+        st.warning("Chưa xây dựng được mô hình. Cần chỉ số giá BĐS + ít nhất 2 biến vĩ mô và ≥10 điểm dữ liệu.")
+        st.info(
+            "Cần có:\n"
+            "1. Giá BĐS Việt Nam (CSV)\n"
+            "2. Dữ liệu FRED (M2, lãi Fed, CPI…)\n"
+            "3. Lãi suất Việt Nam (CSV)"
+        )
         return
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown(metric_card("R² (Train)", f"{model_res['r2_train']:.4f}"),
+        st.markdown(metric_card("R² (huấn luyện)", f"{model_res['r2_train']:.4f}"),
                     unsafe_allow_html=True)
     with c2:
-        st.markdown(metric_card("MAE (Train)", f"{model_res['mae_train']:.4f}"),
+        st.markdown(metric_card("MAE (sai số trung bình)", f"{model_res['mae_train']:.4f}"),
                     unsafe_allow_html=True)
     with c3:
         cv = model_res.get("cv_r2_mean")
         cv_str = f"{cv:.4f}" if cv is not None else "N/A"
-        st.markdown(metric_card("CV R² (Mean)", cv_str), unsafe_allow_html=True)
+        st.markdown(metric_card("R² trung bình (kiểm định chéo)", cv_str), unsafe_allow_html=True)
 
-    st.markdown('<div class="section-header">Feature Importance</div>',
+    st.markdown('<div class="section-header">Mức độ ảnh hưởng từng yếu tố</div>',
                 unsafe_allow_html=True)
     importance = model_res["feature_importance"]
     fig = px.bar(
         importance, x="abs_importance", y="feature",
-        orientation="h", title="Feature Importance (Absolute Coefficient)",
+        orientation="h", title="Độ lớn hệ số (giá trị tuyệt đối)",
         color="coefficient",
         color_continuous_scale="RdBu_r",
     )
     plotly_dark_layout(fig)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown('<div class="section-header">Actual vs Predicted</div>',
+    st.markdown('<div class="section-header">Thực tế so với dự đoán</div>',
                 unsafe_allow_html=True)
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        y=model_res["actual"], mode="lines", name="Actual",
+        y=model_res["actual"], mode="lines", name="Thực tế",
         line=dict(color=ACCENT2),
     ))
     fig.add_trace(go.Scatter(
-        y=model_res["predictions"], mode="lines", name="Predicted",
+        y=model_res["predictions"], mode="lines", name="Mô hình dự đoán",
         line=dict(color=ACCENT, dash="dash"),
     ))
-    plotly_dark_layout(fig, "Actual vs Predicted Property Index")
+    plotly_dark_layout(fig, "Chỉ số giá BĐS: thực tế vs mô hình")
     st.plotly_chart(fig, use_container_width=True)
 
     forecast = analysis_result.get("forecast")
     if forecast is not None:
-        st.markdown('<div class="section-header">Forecast (Next Quarters)</div>',
+        st.markdown('<div class="section-header">Dự báo các quý tới (tham khảo)</div>',
                     unsafe_allow_html=True)
         st.dataframe(forecast, use_container_width=True)
-        st.caption("Based on current macro conditions. "
-                   "This is a simple linear model — not financial advice.")
+        st.caption(
+            "Dựa trên điều kiện vĩ mô hiện tại. Mô hình đơn giản — **không phải tư vấn đầu tư**."
+        )
     else:
-        st.info("Forecast not available (insufficient data for prediction)")
+        st.info("Chưa đủ dữ liệu để dự báo.")
 
 
 def render_tab_vn_history(vn_prices, vn_avg, prop_index):
-    st.markdown('<div class="section-header">Vietnam Real Estate Price History</div>',
+    st.markdown('<div class="section-header">Lịch sử giá nhà đất Việt Nam</div>',
                 unsafe_allow_html=True)
+    st.caption("Theo dõi giá theo vùng, % tăng so năm trước (YoY), và biến động theo thời gian.")
 
     has_local = vn_prices is not None and len(vn_prices) > 0
     has_avg = vn_avg is not None and len(vn_avg) > 0
     has_index = prop_index is not None and len(prop_index) > 0
 
     if not has_local:
-        st.warning("No property price data available.\n\n"
-                    "Add CSV at `vre/data/vietnam/property_prices.csv`\n\n"
-                    "Format: `date,region,price_per_m2,yoy_change`")
+        st.warning(
+            "Chưa có dữ liệu giá nhà.\n\n"
+            "Thêm file `vre/data/vietnam/property_prices.csv`\n\n"
+            "Định dạng: `date,region,price_per_m2,yoy_change`"
+        )
         return
 
-    st.subheader("Price by Region")
+    st.subheader("Giá theo khu vực")
     regions = sorted(vn_prices["region"].unique()) if "region" in vn_prices.columns else []
     selected_regions = st.multiselect(
-        "Filter regions",
+        "Chọn khu vực hiển thị",
         regions, default=regions[:5] if len(regions) > 5 else regions,
     )
     if selected_regions:
@@ -408,31 +486,31 @@ def render_tab_vn_history(vn_prices, vn_avg, prop_index):
 
     fig = px.line(
         filtered, x="date", y="price_per_m2", color="region",
-        title="Price per m² by Region Over Time",
+        title="Giá m² theo thời gian (VND)",
     )
     plotly_dark_layout(fig)
     fig.update_layout(height=500)
     st.plotly_chart(fig, use_container_width=True)
 
     if "yoy_change" in vn_prices.columns:
-        st.subheader("YoY Price Change (%)")
+        st.subheader("% thay đổi so cùng kỳ năm trước (YoY)")
         fig2 = px.bar(
             filtered, x="date", y="yoy_change", color="region",
-            barmode="group", title="Year-over-Year Price Change",
+            barmode="group", title="Tăng/giảm giá so năm trước (%)",
         )
         plotly_dark_layout(fig2)
         st.plotly_chart(fig2, use_container_width=True)
 
     if has_avg:
-        st.subheader("National Average Trend")
+        st.subheader("Xu hướng bình quân cả nước")
         fig = make_subplots(
             rows=2, cols=1, shared_xaxes=True,
-            subplot_titles=("Avg Price per m²", "YoY Change %"),
+            subplot_titles=("Giá m² bình quân", "% YoY"),
             vertical_spacing=0.1,
         )
         fig.add_trace(go.Scatter(
             x=vn_avg["date"], y=vn_avg["price_per_m2"],
-            mode="lines+markers", name="Avg Price",
+            mode="lines+markers", name="Giá bình quân",
             line=dict(color=ACCENT2),
         ), row=1, col=1)
 
@@ -441,15 +519,16 @@ def render_tab_vn_history(vn_prices, vn_avg, prop_index):
                       for v in vn_avg["yoy_change"].fillna(0)]
             fig.add_trace(go.Bar(
                 x=vn_avg["date"], y=vn_avg["yoy_change"],
-                name="YoY Change", marker_color=colors,
+                name="YoY", marker_color=colors,
             ), row=2, col=1)
 
-        plotly_dark_layout(fig, "National Average Property Price — Vietnam")
+        plotly_dark_layout(fig, "Giá nhà bình quân — Việt Nam")
         fig.update_layout(height=600)
         st.plotly_chart(fig, use_container_width=True)
 
     if has_index:
-        st.subheader("Property Price Index + Volatility")
+        st.subheader("Chỉ số giá & độ biến động")
+        st.caption("Biến động: đo mức dao động ngắn hạn quanh các kỳ gần nhất.")
 
         idx = prop_index.copy()
         idx["pct_change"] = idx["value"].pct_change() * 100
@@ -457,19 +536,19 @@ def render_tab_vn_history(vn_prices, vn_avg, prop_index):
 
         fig_vol = make_subplots(
             rows=2, cols=1, shared_xaxes=True,
-            subplot_titles=("Price Index (2015 = 100)", "Rolling Volatility (4-period)"),
+            subplot_titles=("Chỉ số giá (2015 = 100)", "Biến động (4 kỳ)"),
         )
         fig_vol.add_trace(go.Scatter(
             x=idx["date"], y=idx["value"],
-            name="Index", mode="lines+markers",
+            name="Chỉ số", mode="lines+markers",
             line=dict(color="#818cf8"),
         ), row=1, col=1)
         fig_vol.add_trace(go.Scatter(
             x=idx["date"], y=idx["volatility"],
-            name="Volatility", line=dict(color="#fbbf24"),
+            name="Biến động", line=dict(color="#fbbf24"),
             fill="tozeroy",
         ), row=2, col=1)
-        plotly_dark_layout(fig_vol, "Property Price Index + Volatility")
+        plotly_dark_layout(fig_vol, "Chỉ số giá BĐS & biến động")
         fig_vol.update_layout(height=500)
         st.plotly_chart(fig_vol, use_container_width=True)
 
@@ -477,10 +556,15 @@ def render_tab_vn_history(vn_prices, vn_avg, prop_index):
 def render_tab_comparison(prop_comp, demographics, prop_index_vn):
     st.markdown('<div class="section-header">So sánh giá BĐS với các nước phát triển + Trung Quốc</div>',
                 unsafe_allow_html=True)
-    st.caption("BIS Real Residential Property Price Index (2010=100). Vietnam chuẩn hóa từ dữ liệu local.")
+    st.caption(
+        "Chỉ số giá nhà BIS (mốc 2010 = 100): so sánh cùng thang đo giữa các nước. "
+        "Việt Nam được chuẩn hóa từ dữ liệu trong nước."
+    )
 
     if prop_comp is None:
-        st.warning("Không có dữ liệu so sánh. Kiểm tra FRED_API_KEY.")
+        st.warning(
+            "Không có dữ liệu so sánh. Thử bấm «Làm mới dữ liệu» hoặc cấu hình FRED_API_KEY (Secrets trên Streamlit)."
+        )
         return
 
     prop_with_vn = merge_property_with_vietnam(prop_comp, prop_index_vn)
@@ -492,7 +576,7 @@ def render_tab_comparison(prop_comp, demographics, prop_index_vn):
 
     fig = px.line(
         melt, x="date", y="index", color="country",
-        title="Property Price Index — Vietnam vs Developed Countries + China (2010=100)",
+        title="Chỉ số giá BĐS — Việt Nam và các nước (2010 = 100)",
     )
     plotly_dark_layout(fig)
     fig.update_layout(height=500)
@@ -501,30 +585,36 @@ def render_tab_comparison(prop_comp, demographics, prop_index_vn):
     if len(prop_with_vn) > 0:
         latest = prop_with_vn.drop(columns=["date"]).iloc[-1]
         latest = latest.dropna().sort_values(ascending=False)
-        st.subheader("Giá trị gần nhất (index 2010=100)")
+        st.subheader("Giá trị gần nhất (chỉ số 2010 = 100)")
         n = len(latest)
         cols = st.columns(min(n, 5))
         for i, (country, val) in enumerate(latest.items()):
             with cols[i % 5]:
                 st.metric(country, f"{val:.1f}", None)
 
-    st.markdown('<div class="section-header">Nhân khẩu học — Tỷ lệ sinh (fertility)</div>',
+    st.markdown('<div class="section-header">Nhân khẩu học — Tỷ lệ sinh (số con trung bình/phụ nữ)</div>',
                 unsafe_allow_html=True)
 
     demo_fertility = demographics.get("fertility") if demographics else None
     if demo_fertility is not None and len(demo_fertility) > 0:
+        st.caption(
+            "Tỷ lệ sinh thấp thường gắn với dân số già, nhu cầu nhà dài hạn có thể khác các nước trẻ."
+        )
         melt_fert = demo_fertility.melt(id_vars=["date"], var_name="country", value_name="fertility")
         melt_fert = melt_fert.dropna()
         fig_fert = px.line(
             melt_fert, x="date", y="fertility", color="country",
-            title="Tỷ lệ sinh (số con/phụ nữ) — Tương quan với nhu cầu BĐS dài hạn",
+            title="Tỷ lệ sinh theo thời gian — liên quan nhu cầu BĐS dài hạn",
         )
         plotly_dark_layout(fig_fert)
         st.plotly_chart(fig_fert, use_container_width=True)
 
     st.markdown('<div class="section-header">Tương quan: Tỷ lệ sinh vs Giá BĐS</div>',
                 unsafe_allow_html=True)
-    st.caption("Correlation dương: fertility cao đi kèm giá BĐS cao (cùng xu hướng). Âm: ngược lại.")
+    st.caption(
+        "Tương quan dương: tỷ lệ sinh và giá BĐS cùng xu hướng; âm: ngược chiều. "
+        "Chỉ mang tính thống kê."
+    )
 
     corr_df = build_fertility_property_correlation(prop_with_vn, demo_fertility)
     merged_scatter = build_fertility_property_merged(prop_with_vn, demo_fertility)
@@ -541,7 +631,7 @@ def render_tab_comparison(prop_comp, demographics, prop_index_vn):
                 fig_scatter = px.scatter(
                     sub, x="fertility", y="property",
                     trendline="ols",
-                    title=f"Fertility vs Property — {sel_country}",
+                    title=f"Tỷ lệ sinh vs giá BĐS — {sel_country}",
                 )
                 plotly_dark_layout(fig_scatter)
                 st.plotly_chart(fig_scatter, use_container_width=True)
@@ -564,7 +654,7 @@ def render_tab_comparison(prop_comp, demographics, prop_index_vn):
                 unsafe_allow_html=True)
 
     if not demographics:
-        st.info("Dữ liệu nhân khẩu từ World Bank qua FRED.")
+        st.info("Dữ liệu nhân khẩu: Ngân hàng Thế giới (World Bank), qua FRED.")
         return
 
     demo_pop = demographics.get("population")
@@ -608,8 +698,8 @@ def render_tab_comparison(prop_comp, demographics, prop_index_vn):
 
     st.markdown("---")
     st.caption(
-        "Nguồn: FRED — BIS (property), World Bank WDI (demographics, fertility). "
-        "Vietnam property: chuẩn hóa từ dữ liệu local."
+        "Nguồn: FRED — BIS (giá BĐS), World Bank (dân số, tỷ lệ sinh). "
+        "Giá Việt Nam: chuẩn hóa từ dữ liệu nội bộ."
     )
 
 
@@ -617,8 +707,13 @@ def main():
     apply_custom_css()
     force_refresh = sidebar()
 
-    st.title("Vietnam Real Estate & Economic Dashboard")
-    st.caption("Macro indicators, property prices, correlation analysis, and trend prediction")
+    st.title("Bảng điều khiển: Bất động sản & kinh tế Việt Nam")
+    st.caption(
+        "Theo dõi chỉ số vĩ mô, giá nhà, tương quan và dự báo tham khảo — giao diện tiếng Việt."
+    )
+
+    with st.expander("📖 Hướng dẫn đọc nhanh (cho người theo dõi không chuyên)", expanded=False):
+        st.markdown(VI_GUIDE)
 
     fred_data = cached_fred_series(force=force_refresh)
     fred_monthly = cached_fred_monthly(force=force_refresh)
@@ -633,10 +728,10 @@ def main():
     demographics = cached_demographics()
 
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Raw Data",
-        "🔗 Correlations",
-        "🔮 Prediction",
-        "🏘️ VN History",
+        "📊 Dữ liệu thô",
+        "🔗 Tương quan",
+        "🔮 Dự báo",
+        "🏘️ Lịch sử VN",
         "🌍 So sánh quốc tế",
     ])
 

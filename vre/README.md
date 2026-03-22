@@ -2,6 +2,8 @@
 
 Interactive dashboard analyzing Vietnam real estate prices alongside global macro indicators.
 
+**Giao diện:** Tiếng Việt — có mục *«Hướng dẫn đọc nhanh»* trong app để người không chuyên theo dõi chỉ số.
+
 ## Quick Start
 
 ```bash
