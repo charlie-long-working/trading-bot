@@ -448,9 +448,33 @@ def render_tab_prediction(analysis_result):
     if forecast is not None:
         st.markdown('<div class="section-header">Dự báo các quý tới (tham khảo)</div>',
                     unsafe_allow_html=True)
-        st.dataframe(forecast, use_container_width=True)
+        merged = analysis_result.get("merged_data")
+        current_idx = None
+        if merged is not None and "property_index" in merged.columns:
+            current_idx = float(merged["property_index"].iloc[-1])
+
+        # Thêm cột: giá trị hiện tại, % thay đổi, hướng (tăng/giảm)
+        df_display = forecast.copy()
+        df_display = df_display.rename(columns={
+            "quarter_ahead": "Quý tới",
+            "predicted_index": "Chỉ số dự báo",
+        })
+        if current_idx is not None and current_idx != 0:
+            df_display["Chỉ số hiện tại"] = round(current_idx, 1)
+            pct = (df_display["Chỉ số dự báo"] - current_idx) / current_idx * 100
+            df_display["% thay đổi"] = pct.apply(lambda x: f"{x:+.1f}%")
+            df_display["Hướng"] = pct.apply(
+                lambda x: "Tăng" if x > 0.5 else ("Giảm" if x < -0.5 else "Ổn định")
+            )
+            df_display = df_display[["Quý tới", "Chỉ số hiện tại", "Chỉ số dự báo", "% thay đổi", "Hướng"]]
+        else:
+            df_display = df_display[["Quý tới", "Chỉ số dự báo"]]
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
         st.caption(
-            "Dựa trên điều kiện vĩ mô hiện tại. Mô hình đơn giản — **không phải tư vấn đầu tư**."
+            "**Giải thích:** Chỉ số giá BĐS (mốc 2015 = 100). "
+            "«Chỉ số dự báo» > «hiện tại» → giá có xu hướng tăng; ngược lại → giảm. "
+            "% thay đổi = (dự báo − hiện tại) / hiện tại × 100. "
+            "Dựa trên điều kiện vĩ mô hiện tại — **không phải tư vấn đầu tư**."
         )
     else:
         st.info("Chưa đủ dữ liệu để dự báo.")
