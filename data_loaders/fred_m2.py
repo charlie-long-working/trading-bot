@@ -22,11 +22,14 @@ try:
 except ImportError:
     Fred = None
 
-# Cache: dùng chung với vre nếu có, hoặc data/fred
+# Cache M2 under data/fred; optionally read sibling stock/vre FRED CSV
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CACHE_DIR = REPO_ROOT / "vre" / "data" / "fred"
-if not CACHE_DIR.exists():
-    CACHE_DIR = REPO_ROOT / "data" / "fred"
+_STOCK_FRED = REPO_ROOT.parent / "stock" / "vre" / "data" / "fred"
+CACHE_DIR = REPO_ROOT / "data" / "fred"
+if not (CACHE_DIR / "M2SL.csv").exists() and (_STOCK_FRED / "M2SL.csv").exists():
+    CACHE_DIR = _STOCK_FRED
+else:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 M2_SERIES_ID = "M2SL"
 

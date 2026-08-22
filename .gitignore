@@ -1,14 +1,18 @@
 .venv/
 __pycache__/
 *.pyc
-# Root klines/cache only — keep vre/data/ for Vietnam CSVs & small caches
+# Root klines/cache only
 /data/
 *.zip
 .env
 .DS_Store
-.cursor/
+# Cursor: ignore plans/cache; keep skills for agents
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
 # Large downloaded kline caches (regenerate locally)
 botv2/data/cache/
+archive/botv2/data/cache/
 # Docker
 .docker/
 *.log
