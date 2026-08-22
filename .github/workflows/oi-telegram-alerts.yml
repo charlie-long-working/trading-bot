@@ -46,10 +46,13 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
+          echo "SHA=${GITHUB_SHA}"
+          echo "REF=${GITHUB_REF}"
           INTERVAL="${{ github.event.inputs.interval || 'auto' }}"
           DRY="${{ github.event.inputs.dry_run || 'false' }}"
-          EXTRA=""
-          if [ "$DRY" = "true" ]; then EXTRA="--dry-run"; fi
+          EXTRA="--no-liq"
+          if [ "$DRY" = "true" ]; then EXTRA="$EXTRA --dry-run"; fi
+          echo "Run INTERVAL=$INTERVAL DRY=$DRY EXTRA=$EXTRA"
           PYTHONPATH=. python -m botdown.run_oi_telegram \
             --symbols BTCUSDT,ETHUSDT \
             --interval "$INTERVAL" \
