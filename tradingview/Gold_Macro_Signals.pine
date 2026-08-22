@@ -1,0 +1,146 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// Gold + macro overlay: EMA stack, NBER-style recession tint, major conflict markers,
+// request.security for DXY / yields / Fed; optional rolling correlation subpane.
+// Apply on a gold chart (e.g. OANDA:XAUUSD, COMEX:GC1!). Macro symbols are inputs (TV data access may vary by plan).
+
+//@version=5
+indicator("Gold Macro — Signals", shorttitle="GoldMacro", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+g_ma = "EMA"
+i_ema20  = input.bool(true, "EMA 20", group=g_ma)
+i_ema50  = input.bool(true, "EMA 50", group=g_ma)
+i_ema100 = input.bool(true, "EMA 100", group=g_ma)
+i_ema200 = input.bool(true, "EMA 200", group=g_ma)
+
+g_macro = "Macro (request.security)"
+i_symDXY   = input.symbol("TVC:DXY", "DXY / USD index", group=g_macro)
+i_symUS10Y = input.symbol("TVC:US10Y", "US 10Y yield", group=g_macro)
+i_symFed   = input.symbol("FRED:FEDFUNDS", "Fed funds (FRED feed)", group=g_macro, tooltip="Đổi sang mã khác nếu broker không có FRED, ví dụ ECONOMICS:USINTR")
+
+g_corr = "Tương quan rolling (pane phụ)"
+i_showCorr = input.bool(false, "Hiển thị corr(close, DXY)", group=g_corr)
+i_corrLen  = input.int(60, "Độ dài (nến)", group=g_corr, minval=10, maxval=500)
+
+g_evt = "Sự kiện"
+i_showRecession = input.bool(true, "Nền suy thoái Mỹ (NBER)", group=g_evt)
+i_recessionTint = input.color(color.new(color.red, 88), "Màu nền suy thoái", group=g_evt)
+i_showWar = input.bool(true, "Nhãn chiến tranh / căng thẳng (mốc chính)", group=g_evt)
+i_warBg = input.bool(false, "Nền giai đoạn chiến tranh (nhạt)", group=g_evt)
+i_warTint = input.color(color.new(color.maroon, 92), "Màu nền chiến tranh", group=g_evt)
+
+g_sig = "Tín hiệu"
+i_macroFilter = input.bool(true, "Lọc macro: DXY dưới SMA", group=g_sig)
+i_macroSmaLen = input.int(50, "SMA trên DXY (macro)", group=g_sig, minval=5, maxval=200)
+i_yieldFilter = input.bool(false, "Thêm: US10Y dưới SMA(N)", group=g_sig)
+i_yieldSmaLen = input.int(50, "SMA trên US10Y", group=g_sig, minval=5, maxval=200)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EMA
+// ═══════════════════════════════════════════════════════════════════════════
+
+ema20  = ta.ema(close, 20)
+ema50  = ta.ema(close, 50)
+ema100 = ta.ema(close, 100)
+ema200 = ta.ema(close, 200)
+
+plot(i_ema20  ? ema20  : na,  "EMA 20",  color=color.new(color.teal, 0), linewidth=1)
+plot(i_ema50  ? ema50  : na,  "EMA 50",  color=color.new(color.orange, 0), linewidth=2)
+plot(i_ema100 ? ema100 : na, "EMA 100", color=color.new(color.purple, 0), linewidth=1)
+plot(i_ema200 ? ema200 : na, "EMA 200", color=color.new(color.gray, 0), linewidth=2)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MACRO (aligned to chart TF)
+// ═══════════════════════════════════════════════════════════════════════════
+
+dxyM   = request.security(i_symDXY,   timeframe.period, close, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+us10M  = request.security(i_symUS10Y, timeframe.period, close, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+fedM   = request.security(i_symFed,   timeframe.period, close, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_off)
+
+dxySma   = ta.sma(dxyM, i_macroSmaLen)
+yieldSma = ta.sma(us10M, i_yieldSmaLen)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NBER US recessions (peak → trough, approximate bar shading)
+// ═══════════════════════════════════════════════════════════════════════════
+
+f_recession() =>
+    t = time
+    // (start inclusive, end exclusive) in exchange timezone
+    (t >= timestamp("1969-12-01") and t < timestamp("1970-12-01")) or
+     (t >= timestamp("1973-11-01") and t < timestamp("1975-04-01")) or
+     (t >= timestamp("1980-01-01") and t < timestamp("1980-08-01")) or
+     (t >= timestamp("1981-07-01") and t < timestamp("1982-12-01")) or
+     (t >= timestamp("1990-07-01") and t < timestamp("1991-04-01")) or
+     (t >= timestamp("2001-03-01") and t < timestamp("2001-12-01")) or
+     (t >= timestamp("2007-12-01") and t < timestamp("2009-07-01")) or
+     (t >= timestamp("2020-02-01") and t < timestamp("2020-05-01"))
+
+bgcolor(i_showRecession and f_recession() ? i_recessionTint : na, title="Recession")
+
+// ═══════════════════════════════════════════════════════════════════════════
+// War / stress periods (khớp gần với vre/data/events/war_episodes.csv)
+// ═══════════════════════════════════════════════════════════════════════════
+
+f_warPeriod() =>
+    t = time
+    (t >= timestamp("1990-08-02") and t < timestamp("1991-05-01")) or
+     (t >= timestamp("1998-03-24") and t < timestamp("1999-06-21")) or
+     (t >= timestamp("2001-10-07") and t < timestamp("2015-01-01")) or
+     (t >= timestamp("2003-03-20") and t < timestamp("2011-12-16")) or
+     (t >= timestamp("2022-02-24") and t < timestamp("2030-12-31"))
+
+bgcolor(i_showWar and i_warBg and f_warPeriod() ? i_warTint : na, title="War period")
+
+// Một dấu trên nến đầu tiên của từng mốc (không spam label)
+gulfStart  = time >= timestamp("1990-08-02") and time < timestamp("1990-09-01")
+afgStart   = time >= timestamp("2001-10-07") and time < timestamp("2001-11-01")
+iraqStart  = time >= timestamp("2003-03-20") and time < timestamp("2003-04-01")
+ukrStart   = time >= timestamp("2022-02-24") and time < timestamp("2022-03-01")
+gfcStress  = time >= timestamp("2008-09-15") and time < timestamp("2008-10-01")
+
+f_edge(cond) => cond and (bar_index == 0 or not cond[1])
+
+plotshape(i_showWar and f_edge(gulfStart), title="Gulf", style=shape.xcross, location=location.abovebar, size=size.tiny, color=color.maroon, text="GW")
+plotshape(i_showWar and f_edge(afgStart), title="Afg", style=shape.xcross, location=location.abovebar, size=size.tiny, color=color.maroon, text="AFG")
+plotshape(i_showWar and f_edge(iraqStart), title="Iraq", style=shape.xcross, location=location.abovebar, size=size.tiny, color=color.maroon, text="IRQ")
+plotshape(i_showWar and f_edge(ukrStart), title="Ukr", style=shape.xcross, location=location.abovebar, size=size.tiny, color=color.maroon, text="UKR")
+plotshape(i_showWar and f_edge(gfcStress), title="GFC", style=shape.xcross, location=location.abovebar, size=size.tiny, color=color.gray, text="GFC")
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Signals (long bias; macro supportive)
+// ═══════════════════════════════════════════════════════════════════════════
+
+stackBull = ema20 > ema50 and ema50 > ema200
+stackBear = ema20 < ema50 and ema50 < ema200
+
+macroOk = not i_macroFilter or (not na(dxyM) and dxyM < dxySma)
+yieldOk = not i_yieldFilter or (not na(us10M) and us10M < yieldSma)
+
+longCond  = stackBull and macroOk and yieldOk
+shortCond = stackBear and (not i_macroFilter or (not na(dxyM) and dxyM > dxySma))
+
+plotshape(longCond,  title="Long",  style=shape.triangleup,   location=location.belowbar, size=size.small, color=color.new(color.green, 0), text="L")
+plotshape(shortCond, title="Short", style=shape.triangledown, location=location.abovebar, size=size.small, color=color.new(color.red, 0), text="S")
+
+// Rolling correlation gold vs DXY (subpane)
+corrGD = ta.correlation(close, dxyM, i_corrLen)
+plot(i_showCorr ? corrGD : na, "Corr gold–DXY", color=color.new(color.blue, 0), display=display.pane)
+plot(i_showCorr ? 0.0 : na, "Corr zero", color=color.gray, linewidth=1, style=plot.style_line, display=display.pane)
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Data window helpers (not plotted)
+// ═══════════════════════════════════════════════════════════════════════════
+
+plot(dxyM,  "DXY (hidden)", display=display.none)
+plot(us10M, "US10Y (hidden)", display=display.none)
+plot(fedM,  "FedFunds (hidden)", display=display.none)
+
+// Alerts (TradingView: tạo alert từ điều kiện)
+longEdge  = longCond  and (bar_index == 0 or not longCond[1])
+shortEdge = shortCond and (bar_index == 0 or not shortCond[1])
+alertcondition(longEdge,  "Gold Macro — Long",  "Gold Macro LONG")
+alertcondition(shortEdge, "Gold Macro — Short", "Gold Macro SHORT")

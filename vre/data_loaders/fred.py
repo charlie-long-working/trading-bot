@@ -1,7 +1,8 @@
 """
 Fetch economic indicators from FRED (Federal Reserve Economic Data).
 
-Series: M2SL, FEDFUNDS, CPIAUCSL, FPCPITOTLZGVNM, DCOILWTICO, DTWEXBGS
+Series: M2SL, FEDFUNDS, CPIAUCSL, FPCPITOTLZGVNM, DCOILWTICO, DTWEXBGS,
+        GS10, GS2, USREC, VIXCLS (macro stress; spot gold via yfinance in gold_macro_data).
 Requires FRED_API_KEY env var (free at https://fred.stlouisfed.org/docs/api/api_key.html).
 Cache: vre/data/fred/{series_id}.csv (columns: date,value).
 """
@@ -36,6 +37,10 @@ SERIES = {
     "FPCPITOTLZGVNM": "CPI Vietnam Inflation (% YoY, Annual)",
     "DCOILWTICO": "Oil WTI Spot Price (USD/barrel, Daily)",
     "DTWEXBGS": "Trade-Weighted US Dollar Index (Broad, Daily)",
+    "GS10": "10-Year Treasury Constant Maturity Rate (%, Monthly)",
+    "GS2": "2-Year Treasury Constant Maturity Rate (%, Monthly)",
+    "USREC": "NBER US Recession Indicator (0/1, Monthly)",
+    "VIXCLS": "CBOE Volatility Index VIX (Close, Daily)",
 }
 
 

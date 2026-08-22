@@ -35,6 +35,33 @@ def load_interest_rates() -> Optional["pd.DataFrame"]:
         return None
 
 
+def latest_policy_rates() -> Optional[dict]:
+    """
+    Latest SBV-style policy snapshot from local CSV.
+
+    Columns (enriched): refinancing_rate, rediscount_rate, overnight_rate,
+    deposit_cap_under_1m, deposit_cap_1m_6m. Legacy deposit_rate kept for compat.
+    """
+    df = load_interest_rates()
+    if df is None or len(df) == 0:
+        return None
+    last = df.iloc[-1]
+    out = {
+        "date": last["date"],
+        "refinancing_rate": float(last["refinancing_rate"]),
+    }
+    for col in (
+        "rediscount_rate",
+        "overnight_rate",
+        "deposit_cap_under_1m",
+        "deposit_cap_1m_6m",
+        "deposit_rate",
+    ):
+        if col in df.columns and pd.notna(last[col]):
+            out[col] = float(last[col])
+    return out
+
+
 def load_property_prices() -> Optional["pd.DataFrame"]:
     """Load Vietnam property price history from CSV."""
     if pd is None:

@@ -1,0 +1,56 @@
+# OI + USDT.D live alerts (I + K) on H1 / H4 → Telegram
+# Secrets: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+
+name: OI Telegram Alerts
+
+on:
+  schedule:
+    # ~5 min after each UTC hour candle close
+    - cron: "5 * * * *"
+  workflow_dispatch:
+    inputs:
+      interval:
+        description: "1h | 4h | auto"
+        required: false
+        default: "auto"
+      dry_run:
+        description: "Print only (true/false)"
+        required: false
+        default: "false"
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install --quiet pandas numpy requests python-dotenv
+
+      - name: Restore dedupe cache
+        uses: actions/cache@v4
+        with:
+          path: botdown/reports/oi_telegram_sent.json
+          key: oi-telegram-sent-${{ github.run_id }}
+          restore-keys: |
+            oi-telegram-sent-
+
+      - name: Run OI Telegram scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          INTERVAL="${{ github.event.inputs.interval || 'auto' }}"
+          DRY="${{ github.event.inputs.dry_run || 'false' }}"
+          EXTRA=""
+          if [ "$DRY" = "true" ]; then EXTRA="--dry-run"; fi
+          PYTHONPATH=. python -m botdown.run_oi_telegram \
+            --symbols BTCUSDT,ETHUSDT \
+            --interval "$INTERVAL" \
+            $EXTRA

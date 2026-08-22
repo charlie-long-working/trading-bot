@@ -1,6 +1,8 @@
 // This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
 // © Regime Fusion — Strategy: Regime + Order Blocks + FVG + Supply/Demand + Volume
+// Cập nhật: 2025-03 — Khớp backtest Python (run_okx_bot, signals/okx_signal).
 // Khuyến nghị: khung 1h. Trên 1D giảm lookback hoặc tăng "Max tuổi vùng".
+// Lưu ý: Pine không có M2 (FRED); bot OKX dùng thêm M2 YoY để điều chỉnh regime.
 
 //@version=5
 indicator("Regime Fusion - Mua/Bán", overlay=true, max_labels_count=500, max_boxes_count=500, max_lines_count=2)

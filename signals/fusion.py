@@ -23,6 +23,9 @@ from strategy import (
     price_at_zone,
     volume_confirmation,
     OBType,
+    compute_volume_profile,
+    vp_allows_long,
+    vp_allows_short,
 )
 
 
@@ -58,6 +61,11 @@ def get_signal(
     sopr: Optional[float] = None,
     mvrv: Optional[float] = None,
     m2_yoy: Optional[float] = None,
+    use_volume_profile: bool = False,
+    vp_lookback: int = 48,
+    vp_bins: int = 32,
+    vp_value_area_pct: float = 0.70,
+    vp_mode: str = "discount_premium",
 ) -> SignalResult:
     """
     Compute current bar signal from regime + technical.
@@ -66,6 +74,9 @@ def get_signal(
     - Long: regime allows long (bull or sideways) + price at bullish OB / bullish FVG / demand zone.
     - Short: regime allows short (bear or sideways) + price at bearish OB / bearish FVG / supply zone.
     - If require_volume_confirmation=True, entry also requires volume >= volume_sma.
+    - use_volume_profile: rolling VP (POC/VAL/VAH) on OHLCV; filters entries (not tick order flow).
+      vp_mode: "discount_premium" — long only if close <= POC, short if close >= POC;
+      "in_va" — close must lie inside [VAL, VAH].
     - sopr/mvrv/m2_yoy: optional on-chain and macro (e.g. Glassnode, FRED); passed to RegimeInputs.
     """
     if regime_classifier is None:
@@ -84,8 +95,23 @@ def get_signal(
         volume, idx=-1, period=volume_period
     )
 
-    # Long: regime allows long + (at bullish OB or bullish FVG or demand) + vol_ok
-    if rules.allow_long and vol_ok:
+    prof = None
+    if use_volume_profile:
+        lb = max(5, min(vp_lookback, len(high)))
+        prof = compute_volume_profile(
+            high,
+            low,
+            volume,
+            lookback=lb,
+            num_bins=max(4, vp_bins),
+            value_area_pct=max(0.5, min(0.95, vp_value_area_pct)),
+        )
+    mode = vp_mode if vp_mode in ("discount_premium", "in_va") else "discount_premium"
+    long_vp_ok = not use_volume_profile or vp_allows_long(last_close, prof, mode)
+    short_vp_ok = not use_volume_profile or vp_allows_short(last_close, prof, mode)
+
+    # Long: regime allows long + (at bullish OB or bullish FVG or demand) + vol_ok + VP filter
+    if rules.allow_long and vol_ok and long_vp_ok:
         for ob in reversed(obs):
             if ob.ob_type == OBType.BULLISH and price_at_ob(last_close, ob):
                 return SignalResult(
@@ -111,8 +137,8 @@ def get_signal(
                     stop_below=z.bottom,
                 )
 
-    # Short: regime allows short + (at bearish OB or bearish FVG or supply) + vol_ok
-    if rules.allow_short and vol_ok:
+    # Short: regime allows short + (at bearish OB or bearish FVG or supply) + vol_ok + VP filter
+    if rules.allow_short and vol_ok and short_vp_ok:
         for ob in reversed(obs):
             if ob.ob_type == OBType.BEARISH and price_at_ob(last_close, ob):
                 return SignalResult(

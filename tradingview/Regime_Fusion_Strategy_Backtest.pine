@@ -1,6 +1,6 @@
 // This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
 // © Regime Fusion — Strategy: Regime + Order Blocks + FVG + Supply/Demand + Volume
-//
+// Cập nhật: 2025-03 — Khớp backtest Python (strategy/rules, signals/fusion).
 // Backtest strategy version of `Regime_Fusion_Signals.pine`
 // - LONG when `longCond`
 // - SHORT when `shortCond`
@@ -13,6 +13,8 @@ strategy(
      pyramiding=0,
      process_orders_on_close=true,
      initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100,
      commission_type=strategy.commission.percent,
      commission_value=0.05,
      calc_on_every_tick=false)
@@ -52,9 +54,8 @@ i_volumeConfirm = input.bool(false, "Bắt buộc volume >= SMA(20)", group=g_fi
 // Orders
 g_orders = "Orders"
 i_allowShort = input.bool(true, "Cho phép SHORT", group=g_orders)
-i_showMA = input.bool(true, "Vẽ MA (tuỳ chọn)", group=g_orders)
-
-// SL/TP drawing is removed in strategy (strategy tester handles PnL).
+i_showMA = input.bool(true, "Vẽ MA", group=g_orders)
+i_showSignals = input.bool(true, "Vẽ tam giác Long/Short", group=g_orders)
 
 // ═══════════════════════════════════════════════════════════════════════
 // REGIME
@@ -249,7 +250,14 @@ if shortCond and i_allowShort
 
     strategy.exit("ShortExit", from_entry="Short", stop=shortSl, limit=shortTp)
 
-// Optional MA plots
+// MA plots
 plot(i_showMA ? shortMa : na, "MA ngắn", color=color.new(#2196F3, 0), linewidth=2)
 plot(i_showMA ? longMa : na, "MA dài", color=color.new(#FF9800, 0), linewidth=2)
+
+// Signal markers (LONG / SHORT tam giác)
+plotshape(i_showSignals and longCond, "LONG", shape.triangleup, location.belowbar, color.new(#4CAF50, 0), size=size.small)
+plotshape(i_showSignals and shortCond, "SHORT", shape.triangledown, location.abovebar, color.new(#f44336, 0), size=size.small)
+
+// Nền regime
+bgcolor(i_showMA ? (isBull ? color.new(#4CAF50, 95) : (isBear ? color.new(#f44336, 95) : na)) : na)
 

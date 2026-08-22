@@ -1,0 +1,85 @@
+{
+  "data": "spot BTCUSDT 1d",
+  "macd_rsi": {
+    "exit": "pct",
+    "take_profit_pct": 0.1,
+    "stop_loss_pct": 0.04,
+    "fee_roundtrip": 0.001,
+    "note": "100% equity m\u1ed7i l\u1ec7nh (trong engine)."
+  },
+  "regime_fusion": {
+    "use_onchain": false,
+    "bull_flat_hold_pct": 0.0,
+    "note": "Sizing theo regime (bear 0.25, sideways 0.5, bull 1.0); SL/TP theo strategy/rules.py v\u00e0 stop c\u1ea5u tr\u00fac khi c\u00f3; engine kh\u00f4ng tr\u1eeb ph\u00ed giao d\u1ecbch."
+  },
+  "windows": [
+    [
+      "Bear 2017\u20132018",
+      "2017-12-11",
+      "2018-08-06"
+    ],
+    [
+      "Bear 2021\u20132022",
+      "2021-11-08",
+      "2022-12-19"
+    ]
+  ],
+  "results": [
+    {
+      "strategy": "macd_rsi_pct",
+      "window": "Bear 2017\u20132018",
+      "start": "2017-12-11",
+      "end": "2018-08-06",
+      "total_return_pct": 52.24,
+      "buy_hold_pct": -58.19,
+      "vs_hold_pct": 110.43,
+      "max_drawdown_pct": 11.8,
+      "num_trades": 16,
+      "win_rate": 50.0,
+      "sharpe_ratio": 6.577,
+      "profit_factor": 2.415
+    },
+    {
+      "strategy": "regime_fusion",
+      "window": "Bear 2017\u20132018",
+      "start": "2017-12-11",
+      "end": "2018-08-06",
+      "total_return_pct": -68.2,
+      "buy_hold_pct": -57.65,
+      "vs_hold_pct": -10.54,
+      "max_drawdown_pct": 68.26,
+      "num_trades": 109,
+      "win_rate": 45.9,
+      "sharpe_ratio": -5.655,
+      "profit_factor": 0.265
+    },
+    {
+      "strategy": "macd_rsi_pct",
+      "window": "Bear 2021\u20132022",
+      "start": "2021-11-08",
+      "end": "2022-12-19",
+      "total_return_pct": 79.96,
+      "buy_hold_pct": -75.66,
+      "vs_hold_pct": 155.62,
+      "max_drawdown_pct": 14.51,
+      "num_trades": 26,
+      "win_rate": 46.2,
+      "sharpe_ratio": 5.805,
+      "profit_factor": 2.225
+    },
+    {
+      "strategy": "regime_fusion",
+      "window": "Bear 2021\u20132022",
+      "start": "2021-11-08",
+      "end": "2022-12-19",
+      "total_return_pct": -32.82,
+      "buy_hold_pct": -75.21,
+      "vs_hold_pct": 42.39,
+      "max_drawdown_pct": 33.42,
+      "num_trades": 121,
+      "win_rate": 35.5,
+      "sharpe_ratio": -4.382,
+      "profit_factor": 0.457
+    }
+  ]
+}

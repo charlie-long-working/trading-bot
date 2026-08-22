@@ -1,0 +1,125 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// © RSI + BB Mean Reversion — Strategy Backtest
+// BẬT "Chỉ theo trend" để tránh thua trong thị trường trending (BTC thường trending).
+
+//@version=5
+strategy(
+     "RSI BB Mean Reversion - Backtest",
+     overlay=true,
+     pyramiding=0,
+     process_orders_on_close=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     calc_on_every_tick=false)
+
+// ═══════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════
+
+g_rsi = "RSI"
+i_rsiLen = input.int(14, "RSI length", group=g_rsi, minval=5)
+i_rsiOversold = input.int(32, "Oversold (Long)", group=g_rsi, minval=20, maxval=40)
+i_rsiOverbought = input.int(68, "Overbought (Short)", group=g_rsi, minval=60, maxval=80)
+
+g_bb = "Bollinger Bands"
+i_bbLen = input.int(20, "BB length", group=g_bb, minval=10)
+i_bbMult = input.float(2.0, "BB mult", group=g_bb, minval=1.0, step=0.1)
+
+g_sltp = "SL / TP (R:R > 1 = TP > SL)"
+i_tpPct = input.float(2.0, "Take profit %", group=g_sltp, minval=0.5, step=0.1)
+i_slPct = input.float(1.5, "Stop loss %", group=g_sltp, minval=1.0, step=0.1)
+
+g_filter = "Bộ lọc"
+i_trendFilter = input.bool(true, "Chỉ giao dịch THEO TREND (LONG khi price>EMA, SHORT khi price<EMA)", group=g_filter, tooltip="BẬT để tránh thua trong thị trường trending như BTC")
+i_emaTrend = input.int(50, "EMA trend (khi bật lọc)", group=g_filter, minval=20)
+i_needReversalCandle = input.bool(true, "Cần nến đảo chiều", group=g_filter)
+i_minBarsBetween = input.int(5, "Tối thiểu bars giữa 2 lệnh", group=g_filter, minval=0)
+i_allowShort = input.bool(true, "Cho phép SHORT", group=g_filter)
+
+g_plot = "Hiển thị"
+i_showBB = input.bool(true, "Vẽ Bollinger Bands", group=g_plot)
+i_showSignals = input.bool(true, "Vẽ tam giác Long/Short", group=g_plot)
+
+// ═══════════════════════════════════════════════════════════════════════
+// RSI & BOLLINGER BANDS
+// ═══════════════════════════════════════════════════════════════════════
+
+rsi = ta.rsi(close, i_rsiLen)
+bbBasis = ta.sma(close, i_bbLen)
+bbDev = i_bbMult * ta.stdev(close, i_bbLen)
+upperBB = bbBasis + bbDev
+lowerBB = bbBasis - bbDev
+
+// ═══════════════════════════════════════════════════════════════════════
+// CONDITIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+emaTrend = ta.ema(close, i_emaTrend)
+uptrend = close > emaTrend
+downtrend = close < emaTrend
+
+atLowerBB = low <= lowerBB * 1.002 or close <= lowerBB * 1.005
+reversalCandleLong = not i_needReversalCandle or (close > open)
+longCondRaw = rsi <= i_rsiOversold and atLowerBB and reversalCandleLong
+if i_trendFilter
+    longCondRaw := longCondRaw and uptrend
+
+atUpperBB = high >= upperBB * 0.998 or close >= upperBB * 0.995
+reversalCandleShort = not i_needReversalCandle or (close < open)
+shortCondRaw = rsi >= i_rsiOverbought and atUpperBB and reversalCandleShort
+if i_trendFilter
+    shortCondRaw := shortCondRaw and downtrend
+
+var int lastLongBar = na
+var int lastShortBar = na
+barsSinceLong = bar_index - nz(lastLongBar, bar_index - 999)
+barsSinceShort = bar_index - nz(lastShortBar, bar_index - 999)
+
+longOk = barsSinceShort >= i_minBarsBetween
+shortOk = barsSinceLong >= i_minBarsBetween
+
+longCond = longCondRaw and longOk and not shortCondRaw
+shortCond = shortCondRaw and shortOk and not longCondRaw and i_allowShort
+
+if longCond
+    lastLongBar := bar_index
+if shortCond
+    lastShortBar := bar_index
+
+// ═══════════════════════════════════════════════════════════════════════
+// SL / TP
+// ═══════════════════════════════════════════════════════════════════════
+
+longSl = close * (1 - i_slPct / 100)
+longTp = close * (1 + i_tpPct / 100)
+shortSl = close * (1 + i_slPct / 100)
+shortTp = close * (1 - i_tpPct / 100)
+
+// ═══════════════════════════════════════════════════════════════════════
+// ORDERS
+// ═══════════════════════════════════════════════════════════════════════
+
+if longCond
+    strategy.close("Short")
+    strategy.entry("Long", strategy.long)
+    strategy.exit("LongExit", from_entry="Long", stop=longSl, limit=longTp)
+
+if shortCond
+    strategy.close("Long")
+    strategy.entry("Short", strategy.short)
+    strategy.exit("ShortExit", from_entry="Short", stop=shortSl, limit=shortTp)
+
+// ═══════════════════════════════════════════════════════════════════════
+// PLOT
+// ═══════════════════════════════════════════════════════════════════════
+
+plot(i_showBB ? upperBB : na, "Upper BB", color=color.new(#9C27B0, 50), linewidth=1)
+plot(i_showBB ? bbBasis : na, "Middle BB", color=color.new(#9C27B0, 30), linewidth=1)
+plot(i_showBB ? lowerBB : na, "Lower BB", color=color.new(#9C27B0, 50), linewidth=1)
+plot(i_trendFilter and i_showBB ? emaTrend : na, "EMA trend", color=color.new(#FF9800, 0), linewidth=2)
+
+plotshape(i_showSignals and longCond, "LONG", shape.triangleup, location.belowbar, color.new(#4CAF50, 0), size=size.small)
+plotshape(i_showSignals and shortCond, "SHORT", shape.triangledown, location.abovebar, color.new(#f44336, 0), size=size.small)

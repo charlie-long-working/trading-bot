@@ -3,8 +3,11 @@ Vietnam Real Estate & Economic Dashboard
 
 Run: streamlit run vre/app.py
 Open: http://localhost:8501
+
+Tự động cập nhật: GitHub Actions chạy mỗi tuần (Thứ Hai 07:00 VN), fetch FRED, push → Streamlit redeploy.
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -13,6 +16,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import streamlit as st
+
+# Streamlit Cloud: Secrets → FRED_API_KEY. Inject vào env để data loaders đọc được.
+try:
+    if hasattr(st, "secrets") and "FRED_API_KEY" in st.secrets and not os.environ.get("FRED_API_KEY"):
+        os.environ["FRED_API_KEY"] = str(st.secrets["FRED_API_KEY"])
+except Exception:
+    pass
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -34,6 +44,7 @@ from vre.data_loaders.comparison import (
 from vre.models.trend_predictor import (
     run_full_analysis, prepare_analysis_dataframe, compute_correlations,
 )
+from vre.data_loaders.policy_crawler import crawl_policies, load_policies
 
 st.set_page_config(
     page_title="BĐS & Kinh tế Việt Nam",
@@ -192,15 +203,42 @@ def cached_property_comparison():
     return load_property_comparison()
 
 
+@st.cache_data(ttl=1800, show_spinner="Đang crawl chính sách BĐS...")
+def cached_policies(refresh: bool = False, months: int = 6):
+    if refresh:
+        return crawl_policies(months=months)
+    existing = load_policies()
+    if existing is not None and len(existing) > 0:
+        return existing
+    return crawl_policies(months=months)
+
+
 @st.cache_data(ttl=3600)
 def cached_demographics():
     return load_demographics()
 
 
+def _get_last_updated() -> str | None:
+    """Đọc thời điểm cập nhật dữ liệu (do GitHub Actions ghi)."""
+    p = ROOT / "vre" / "data" / "last_updated.txt"
+    if p.exists():
+        try:
+            return p.read_text().strip()
+        except Exception:
+            pass
+    return None
+
+
 def sidebar():
     st.sidebar.title("🏠 BĐS & kinh tế VN")
+    last = _get_last_updated()
+    if last:
+        st.sidebar.caption(f"📅 Dữ liệu cập nhật: {last}")
     st.sidebar.markdown("---")
     force = st.sidebar.button("🔄 Làm mới toàn bộ dữ liệu", use_container_width=True)
+    crawl_pol = st.sidebar.button("📜 Crawl chính sách 6 tháng", use_container_width=True)
+    if st.sidebar.button("🕷️ Crawl đầy đủ dữ liệu", use_container_width=True):
+        st.sidebar.info("Chạy: python vre/scripts/crawl_all_vre.py")
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Nguồn dữ liệu**")
     st.sidebar.markdown("""
@@ -213,7 +251,7 @@ def sidebar():
     for sid in SERIES:
         desc = VI_SERIES.get(sid, SERIES.get(sid, sid))
         st.sidebar.caption(f"`{sid}` — {desc}")
-    return force
+    return force, crawl_pol
 
 
 def render_tab_raw_data(fred_data: dict, prop_index, vn_rates, vn_prices):
@@ -444,10 +482,140 @@ def render_tab_prediction(analysis_result):
     plotly_dark_layout(fig, "Chỉ số giá BĐS: thực tế vs mô hình")
     st.plotly_chart(fig, use_container_width=True)
 
-    forecast = analysis_result.get("forecast")
-    if forecast is not None:
-        st.markdown('<div class="section-header">Dự báo các quý tới (tham khảo)</div>',
+    # Backtest — kiểm định mô hình trên dữ liệu quá khứ
+    backtest = analysis_result.get("backtest")
+    if backtest is not None:
+        st.markdown('<div class="section-header">Backtest — kiểm định trên dữ liệu quá khứ</div>',
                     unsafe_allow_html=True)
+        st.caption(
+            "Huấn luyện mô hình trên dữ liệu quá khứ, dự báo quý tiếp theo, so sánh với thực tế. "
+            "Đánh giá độ tin cậy trước khi tin vào dự báo tương lai."
+        )
+        bt = backtest
+        bc1, bc2, bc3 = st.columns(3)
+        with bc1:
+            st.metric("Số lần dự báo (out-of-sample)", bt["n_predictions"])
+        with bc2:
+            st.metric("MAE ngoài mẫu (sai số TB)", f"{bt['mae_oos']:.2f}")
+        with bc3:
+            st.metric("Độ chính xác hướng (Tăng/Giảm)", f"{bt['direction_accuracy']:.1f}%")
+        bt_df = bt["backtest_df"].copy()
+        bt_df = bt_df.rename(columns={
+            "date": "Ngày",
+            "actual": "Thực tế",
+            "predicted": "Dự báo",
+            "error": "Sai số",
+            "actual_direction": "Hướng thực",
+            "predicted_direction": "Hướng dự báo",
+            "direction_correct": "Đúng hướng?",
+        })
+        with st.expander("Xem chi tiết từng kỳ backtest"):
+            st.dataframe(bt_df, use_container_width=True, hide_index=True)
+
+    hbt = analysis_result.get("horizon_backtest")
+    if hbt is not None and hbt.get("national") is not None:
+        st.markdown(
+            '<div class="section-header">Backtest giá/m²: 11/2025 → 08/2026</div>',
+            unsafe_allow_html=True,
+        )
+        st.warning(
+            "Dữ liệu giá **07/2026** đã cập nhật theo khảo sát thị trường (giảm ~20–30% so với đỉnh cuối 2025). "
+            "Backtest phản ánh mức sai lệch khi model momentum **chưa bắt kịp** đợt điều chỉnh mạnh."
+        )
+        st.caption(
+            "Walk-forward: mỗi tháng chỉ dùng dữ liệu **trước** tháng đó để dự báo. "
+            + (hbt.get("note") or "")
+        )
+        hm = hbt.get("metrics", {}).get("national", {})
+        hc1, hc2, hc3, hc4 = st.columns(4)
+        with hc1:
+            st.metric("MAE", f"{hm.get('mae_vnd', 0):,.0f} đ/m²")
+        with hc2:
+            st.metric("MAPE", f"{hm.get('mape_pct', 0):.2f}%")
+        with hc3:
+            st.metric("RMSE", f"{hm.get('rmse_pct', 0):.2f}%")
+        with hc4:
+            da = hm.get("direction_accuracy_pct")
+            st.metric("Đúng hướng", f"{da:.1f}%" if da is not None else "N/A")
+
+        nat_bt = hbt["national"].copy()
+        fig_bt = go.Figure()
+        fig_bt.add_trace(go.Scatter(
+            x=nat_bt["date"], y=nat_bt["price_actual"],
+            mode="lines+markers", name="Thực tế",
+            line=dict(color=ACCENT2),
+        ))
+        fig_bt.add_trace(go.Scatter(
+            x=nat_bt["date"], y=nat_bt["price_predicted"],
+            mode="lines+markers", name="Model (walk-forward)",
+            line=dict(color=ACCENT, dash="dash"),
+        ))
+        plotly_dark_layout(fig_bt, "Giá m² bình quân — thực tế vs model")
+        fig_bt.update_layout(yaxis_tickformat=",")
+        st.plotly_chart(fig_bt, use_container_width=True)
+
+        nat_show = nat_bt.copy()
+        nat_show["date"] = nat_show["date"].astype(str).str[:7]
+        nat_show = nat_show.rename(columns={
+            "date": "Tháng",
+            "price_actual": "Thực tế (VND/m²)",
+            "price_predicted": "Model (VND/m²)",
+            "error_pct": "Sai số (%)",
+            "actual_kind": "Loại GT thực tế",
+        })
+        st.dataframe(nat_show, use_container_width=True, hide_index=True)
+
+        with st.expander("Chi tiết theo từng vùng"):
+            det = hbt["detail"]
+            det = det[det["region"] != "National Avg"].copy()
+            det["date"] = det["date"].astype(str).str[:7]
+            det = det.rename(columns={
+                "date": "Tháng", "region": "Vùng",
+                "price_actual": "Thực tế", "price_predicted": "Model",
+                "error_pct": "Sai số (%)", "actual_kind": "Loại GT",
+            })
+            st.dataframe(det, use_container_width=True, hide_index=True)
+
+    forecast = analysis_result.get("forecast")
+    forecast_adj = analysis_result.get("forecast_adjusted")
+    policy_impact = analysis_result.get("policy_impact")
+
+    if policy_impact is not None and policy_impact.get("n_policies", 0) > 0:
+        st.markdown('<div class="section-header">Chính sách 6 tháng gần đây</div>',
+                    unsafe_allow_html=True)
+        st.caption(
+            "Gồm văn bản NHNN (CSV) + tin RSS VnExpress. "
+            "Điểm tác động: + hỗ trợ tín dụng, − siết/kiểm soát."
+        )
+        pc1, pc2, pc3, pc4 = st.columns(4)
+        with pc1:
+            st.metric("Số chính sách", policy_impact["n_policies"])
+        with pc2:
+            st.metric("Tác động ròng", f"{policy_impact['net_impact']:+.3f}")
+        with pc3:
+            st.metric("Điều chỉnh dự báo", f"{policy_impact['adjustment_pct']:+.2f}%")
+        with pc4:
+            st.metric("Hỗ trợ / Siết", f"+{policy_impact['positive_count']} / −{policy_impact['negative_count']}")
+
+        recent = policy_impact.get("recent_policies")
+        if recent is not None and len(recent) > 0:
+            show = recent[["date", "source", "title", "impact_score", "impact_direction"]].copy()
+            show["date"] = show["date"].astype(str).str[:10]
+            show = show.rename(columns={
+                "date": "Ngày", "source": "Nguồn", "title": "Tiêu đề",
+                "impact_score": "Điểm", "impact_direction": "Hướng",
+            })
+            with st.expander("Xem danh sách chính sách"):
+                st.dataframe(show, use_container_width=True, hide_index=True)
+
+    if forecast is not None:
+        st.markdown('<div class="section-header">Dự báo 1 quý tới (tham khảo)</div>',
+                    unsafe_allow_html=True)
+        st.caption(
+            "**Tại sao chỉ 1 quý?** Mô hình dùng chỉ số vĩ mô (M2, Fed, CPI, dầu, USD...) làm đầu vào. "
+            "Chúng ta không biết các chỉ số này ở tương lai → giả định «không đổi». "
+            "Với giả định đó, dự báo Q2–Q4 sẽ giống Q1 nên chỉ hiển thị 1 quý."
+        )
         merged = analysis_result.get("merged_data")
         current_idx = None
         if merged is not None and "property_index" in merged.columns:
@@ -455,28 +623,116 @@ def render_tab_prediction(analysis_result):
 
         # Thêm cột: giá trị hiện tại, % thay đổi, hướng (tăng/giảm)
         df_display = forecast.copy()
+        if forecast_adj is not None and "predicted_index" in forecast_adj.columns:
+            df_display["predicted_index_policy"] = forecast_adj["predicted_index"]
         df_display = df_display.rename(columns={
             "quarter_ahead": "Quý tới",
-            "predicted_index": "Chỉ số dự báo",
+            "predicted_index": "Chỉ số vĩ mô (base)",
+            "predicted_index_policy": "Chỉ số + chính sách",
         })
         if current_idx is not None and current_idx != 0:
             df_display["Chỉ số hiện tại"] = round(current_idx, 1)
-            pct = (df_display["Chỉ số dự báo"] - current_idx) / current_idx * 100
+            base_col = "Chỉ số vĩ mô (base)" if "Chỉ số vĩ mô (base)" in df_display.columns else "Chỉ số dự báo"
+            pred_col = "Chỉ số + chính sách" if "Chỉ số + chính sách" in df_display.columns else base_col
+            pct = (df_display[pred_col] - current_idx) / current_idx * 100
             df_display["% thay đổi"] = pct.apply(lambda x: f"{x:+.1f}%")
             df_display["Hướng"] = pct.apply(
                 lambda x: "Tăng" if x > 0.5 else ("Giảm" if x < -0.5 else "Ổn định")
             )
-            df_display = df_display[["Quý tới", "Chỉ số hiện tại", "Chỉ số dự báo", "% thay đổi", "Hướng"]]
+            cols = ["Quý tới", "Chỉ số hiện tại", base_col]
+            if pred_col in df_display.columns and pred_col != base_col:
+                cols.append(pred_col)
+            cols += ["% thay đổi", "Hướng"]
+            df_display = df_display[[c for c in cols if c in df_display.columns]]
         else:
-            df_display = df_display[["Quý tới", "Chỉ số dự báo"]]
+            show_cols = ["Quý tới", "Chỉ số vĩ mô (base)"]
+            if "Chỉ số + chính sách" in df_display.columns:
+                show_cols.append("Chỉ số + chính sách")
+            df_display = df_display[[c for c in show_cols if c in df_display.columns]]
         st.dataframe(df_display, use_container_width=True, hide_index=True)
         st.caption(
-            "**Giải thích:** Chỉ số giá BĐS (mốc 2015 = 100). "
-            "«Chỉ số dự báo» > «hiện tại» → giá có xu hướng tăng; ngược lại → giảm. "
-            "% thay đổi = (dự báo − hiện tại) / hiện tại × 100. "
-            "Dựa trên điều kiện vĩ mô hiện tại — **không phải tư vấn đầu tư**."
+            "Chỉ số giá BĐS (mốc 2015 = 100). «Dự báo» > «hiện tại» → xu hướng tăng; ngược lại → giảm. "
+            "**Không phải tư vấn đầu tư.**"
         )
-    else:
+
+    horizon = analysis_result.get("horizon_forecast")
+    if horizon is not None and horizon.get("national") is not None:
+        nat = horizon["national"]
+        summ = horizon.get("summary") or {}
+        st.markdown(
+            '<div class="section-header">Dự báo giá nhà 08/2026 → 12/2027</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Giá/m² theo tháng: momentum YoY từng vùng (suy giảm dần) + vĩ mô + chính sách. "
+            "Neo từ dữ liệu 01/2026, nội suy tới 08/2026. **Kịch bản tham khảo.**"
+        )
+        if summ:
+            hc1, hc2, hc3, hc4 = st.columns(4)
+            with hc1:
+                st.metric("Giá BQ đầu kỳ (08/2026)", f"{summ.get('price_start_vnd', 0):,.0f} đ/m²")
+            with hc2:
+                st.metric("Giá BQ cuối kỳ (12/2027)", f"{summ.get('price_end_vnd', 0):,.0f} đ/m²")
+            with hc3:
+                st.metric("Tăng cả giai đoạn", f"{summ.get('change_pct', 0):+.1f}%")
+            with hc4:
+                st.metric("Cuối kỳ (+ chính sách)", f"{summ.get('price_end_policy_vnd', 0):,.0f} đ/m²")
+
+        fig_h = go.Figure()
+        fig_h.add_trace(go.Scatter(
+            x=nat["date"], y=nat["price_per_m2"],
+            mode="lines+markers", name="Dự báo base",
+            line=dict(color=ACCENT2),
+        ))
+        fig_h.add_trace(go.Scatter(
+            x=nat["date"], y=nat["price_per_m2_policy"],
+            mode="lines", name="Dự báo + chính sách",
+            line=dict(color=ACCENT, dash="dash"),
+        ))
+        plotly_dark_layout(fig_h, "Giá m² bình quân cả nước — dự báo 08/2026–12/2027")
+        fig_h.update_layout(yaxis_tickformat=",")
+        st.plotly_chart(fig_h, use_container_width=True)
+
+        regional = horizon.get("regional")
+        if regional is not None and len(regional) > 0:
+            end_slice = regional[regional["date"] == regional["date"].max()].copy()
+            end_slice = end_slice.sort_values("price_per_m2", ascending=False)
+            end_show = end_slice[["region", "price_per_m2", "price_per_m2_policy", "yoy_implied"]].rename(columns={
+                "region": "Khu vực",
+                "price_per_m2": "Giá 12/2027 (base)",
+                "price_per_m2_policy": "Giá 12/2027 (+ CS)",
+                "yoy_implied": "YoY implied (%)",
+            })
+            st.subheader("Giá dự báo cuối kỳ theo vùng (12/2027)")
+            st.dataframe(end_show, use_container_width=True, hide_index=True)
+
+            sel_r = st.multiselect(
+                "Biểu đồ theo vùng",
+                sorted(regional["region"].unique()),
+                default=sorted(regional["region"].unique())[:3],
+                key="horizon_regions",
+            )
+            if sel_r:
+                sub = regional[regional["region"].isin(sel_r)]
+                fig_r = px.line(
+                    sub, x="date", y="price_per_m2", color="region",
+                    title="Giá/m² theo vùng — 08/2026 → 12/2027",
+                )
+                plotly_dark_layout(fig_r)
+                fig_r.update_layout(yaxis_tickformat=",")
+                st.plotly_chart(fig_r, use_container_width=True)
+
+            with st.expander("Xem chi tiết từng tháng (tất cả vùng)"):
+                detail = regional.copy()
+                detail["date"] = detail["date"].astype(str).str[:7]
+                detail = detail.rename(columns={
+                    "date": "Tháng", "region": "Vùng",
+                    "price_per_m2": "Giá base (VND/m²)",
+                    "price_per_m2_policy": "Giá + CS (VND/m²)",
+                    "yoy_implied": "YoY (%)",
+                })
+                st.dataframe(detail, use_container_width=True, hide_index=True)
+    elif forecast is None:
         st.info("Chưa đủ dữ liệu để dự báo.")
 
 
@@ -729,7 +985,9 @@ def render_tab_comparison(prop_comp, demographics, prop_index_vn):
 
 def main():
     apply_custom_css()
-    force_refresh = sidebar()
+    force_refresh, crawl_policies_btn = sidebar()
+
+    policies = cached_policies(refresh=crawl_policies_btn, months=6)
 
     st.title("Bảng điều khiển: Bất động sản & kinh tế Việt Nam")
     st.caption(
@@ -747,7 +1005,7 @@ def main():
     vn_avg = cached_vn_avg()
 
     merged = prepare_analysis_dataframe(fred_monthly, prop_index, vn_rates)
-    analysis = run_full_analysis(fred_monthly, prop_index, vn_rates)
+    analysis = run_full_analysis(fred_monthly, prop_index, vn_rates, policies=policies, policy_months=6)
     prop_comp = cached_property_comparison()
     demographics = cached_demographics()
 

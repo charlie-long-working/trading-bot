@@ -1,0 +1,10 @@
+{
+  "crawled_at": "2026-08-22T16:46:18.413806",
+  "n_articles": 220,
+  "n_price_extractions": 52,
+  "n_benchmarks": 18,
+  "merge": {
+    "added": 0,
+    "updated": 5
+  }
+}

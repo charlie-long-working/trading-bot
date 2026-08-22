@@ -1,4 +1,38 @@
-# Indicator TradingView
+# Indicator & Strategy TradingView
+
+---
+
+## RSI Trend Dip (khuyến nghị cho BTC/crypto) — `RSI_Trend_Dip_Signals.pine` / `RSI_Trend_Dip_Strategy.pine`
+
+**Chỉ giao dịch theo xu hướng:** LONG khi uptrend (price > EMA) + RSI oversold (mua dip). SHORT khi downtrend + RSI overbought (bán đỉnh). Tránh mean reversion ngược trend → giảm thua trong thị trường trending như BTC.
+
+| Thành phần | Mặc định |
+|------------|----------|
+| EMA trend | 50 |
+| RSI oversold / overbought | 38 / 62 |
+| TP / SL | 2.5% / 1.5% (R:R > 1) |
+
+**Files:** `RSI_Trend_Dip_Signals.pine` | `RSI_Trend_Dip_Strategy.pine`
+
+---
+
+## RSI BB Mean Reversion — `RSI_BB_MeanReversion_Signals.pine` / `RSI_BB_MeanReversion_Strategy.pine`
+
+Strategy mean reversion. **BẬT "Chỉ giao dịch theo trend"** trong Settings để tránh thua trong trending market. Mặc định đã bật.
+
+| Thành phần | Mặc định |
+|------------|----------|
+| RSI oversold / overbought | 32 / 68 |
+| TP / SL | 2% / 1.5% |
+| Chỉ theo trend | Bật (LONG khi price > EMA50, SHORT khi price < EMA50) |
+
+---
+
+## Regime Fusion: Thế mạnh khi thua Buy & Hold
+
+Regime Fusion thường **thua Buy & Hold** trong bull dài hạn. Thế mạnh: **giảm drawdown**, **short trong bear**, **không mua đỉnh**, **SL/TP rõ ràng**. Chi tiết: [docs/REGIME_FUSION_STRENGTHS.md](../docs/REGIME_FUSION_STRENGTHS.md).
+
+---
 
 ## MA200 & Chênh lệch % (`MA200_Price_Deviation.pine`)
 

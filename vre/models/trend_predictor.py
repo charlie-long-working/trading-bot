@@ -120,10 +120,12 @@ def build_regression_model(
 def forecast_next_quarters(
     model_result: dict,
     latest_features: "pd.DataFrame",
-    n_quarters: int = 2,
+    n_quarters: int = 1,
 ) -> Optional["pd.DataFrame"]:
     """
-    Forecast property index for next n quarters using the trained model.
+    Forecast property index for next quarter(s) using the trained model.
+    Giả định: chỉ số vĩ mô (M2, Fed, CPI...) không đổi — không có dữ liệu tương lai.
+    → Dự báo 1 quý tới là hợp lý; Q2–Q4 sẽ giống Q1 nếu giả định đó đúng.
     latest_features: single-row DataFrame with the most recent feature values.
     """
     if model_result is None or pd is None or np is None:
@@ -142,15 +144,80 @@ def forecast_next_quarters(
         X = X.reshape(1, -1)
 
     X_scaled = scaler.transform(X)
+    pred_val = float(model.predict(X_scaled)[0])
     predictions = []
     for q in range(1, n_quarters + 1):
-        pred = model.predict(X_scaled)[0]
         predictions.append({
             "quarter_ahead": q,
-            "predicted_index": round(pred, 2),
+            "predicted_index": round(pred_val, 2),
         })
 
     return pd.DataFrame(predictions)
+
+
+def run_backtest(
+    merged: "pd.DataFrame",
+    min_train: int = 12,
+    n_forecast: int = 1,
+) -> Optional[dict]:
+    """
+    Backtest: rolling forecast — train on past, predict next quarter, so sánh với thực tế.
+    Returns dict with: backtest_df, mae_oos, direction_accuracy, n_predictions.
+    """
+    if pd is None or np is None or LinearRegression is None:
+        return None
+
+    features = [c for c in FEATURE_COLS if c in merged.columns]
+    if TARGET_COL not in merged.columns or len(features) < 2:
+        return None
+
+    data = merged[features + [TARGET_COL]].dropna()
+    if len(data) < min_train + n_forecast:
+        return None
+
+    rows = []
+    for i in range(min_train, len(data) - n_forecast + 1):
+        train = data.iloc[:i]
+        X_train = train[features].values
+        y_train = train[TARGET_COL].values
+        scaler = StandardScaler()
+        X_sc = scaler.fit_transform(X_train)
+        model = LinearRegression()
+        model.fit(X_sc, y_train)
+
+        X_test = data.iloc[i : i + n_forecast][features].values
+        X_test_sc = scaler.transform(X_test)
+        pred = model.predict(X_test_sc)[-1]
+        actual = data[TARGET_COL].iloc[i + n_forecast - 1]
+
+        idx = data.index[i + n_forecast - 1]
+        prev_actual = data[TARGET_COL].iloc[i - 1]
+        actual_direction = "Tăng" if actual > prev_actual else ("Giảm" if actual < prev_actual else "Ổn định")
+        pred_direction = "Tăng" if pred > prev_actual else ("Giảm" if pred < prev_actual else "Ổn định")
+
+        rows.append({
+            "date": idx,
+            "actual": round(actual, 2),
+            "predicted": round(pred, 2),
+            "error": round(actual - pred, 2),
+            "actual_direction": actual_direction,
+            "predicted_direction": pred_direction,
+            "direction_correct": actual_direction == pred_direction,
+        })
+
+    if not rows:
+        return None
+
+    bt_df = pd.DataFrame(rows)
+    mae_oos = float(np.abs(bt_df["error"]).mean())
+    dir_acc = float(bt_df["direction_correct"].mean()) * 100
+
+    return {
+        "backtest_df": bt_df,
+        "mae_oos": round(mae_oos, 4),
+        "direction_accuracy": round(dir_acc, 1),
+        "n_predictions": len(rows),
+    }
 
 
 def prepare_analysis_dataframe(
@@ -217,6 +284,8 @@ def run_full_analysis(
     fred_monthly: Optional["pd.DataFrame"],
     property_df: Optional["pd.DataFrame"],
     vn_rates: Optional["pd.DataFrame"],
+    policies: Optional["pd.DataFrame"] = None,
+    policy_months: int = 6,
 ) -> dict:
     """
     Run the complete analysis pipeline:
@@ -224,13 +293,15 @@ def run_full_analysis(
     2. Compute correlations
     3. Build regression model
     4. Generate forecasts
+    5. Optional: adjust forecast by recent policy impact
     Returns dict with all results.
     """
     warnings.filterwarnings("ignore")
 
     merged = prepare_analysis_dataframe(fred_monthly, property_df, vn_rates)
     result = {"merged_data": merged, "correlations": None,
-              "model_result": None, "forecast": None}
+              "model_result": None, "forecast": None, "forecast_adjusted": None,
+              "policy_impact": None}
 
     if merged is None:
         return result
@@ -243,7 +314,54 @@ def run_full_analysis(
 
     if model_result is not None and len(merged) > 0:
         latest = merged.iloc[[-1]]
-        forecast = forecast_next_quarters(model_result, latest, n_quarters=4)
+        forecast = forecast_next_quarters(model_result, latest, n_quarters=1)
         result["forecast"] = forecast
+
+        if policies is not None and len(policies) > 0 and forecast is not None:
+            try:
+                from vre.models.policy_scenarios import (
+                    compute_policy_net_impact, apply_policy_adjustment,
+                )
+                current_idx = None
+                if "property_index" in merged.columns:
+                    current_idx = float(merged["property_index"].iloc[-1])
+                impact = compute_policy_net_impact(policies, months=policy_months)
+                result["policy_impact"] = impact
+                result["forecast_adjusted"] = apply_policy_adjustment(
+                    forecast, impact, current_index=current_idx,
+                )
+            except Exception:
+                pass
+
+    backtest = run_backtest(merged, min_train=12, n_forecast=1)
+    result["backtest"] = backtest
+
+    try:
+        from vre.data_loaders.vietnam_econ import load_property_prices
+        from vre.models.backtest_horizon import run_walk_forward_backtest
+        prices_bt = load_property_prices()
+        if prices_bt is not None and fred_monthly is not None:
+            result["horizon_backtest"] = run_walk_forward_backtest(
+                prices_bt, fred_monthly, vn_rates,
+                start="2025-11-01", end="2026-08-01",
+            )
+    except Exception:
+        result["horizon_backtest"] = None
+
+    if property_df is not None:
+        try:
+            from vre.data_loaders.vietnam_econ import load_property_prices
+            from vre.models.forecast_horizon import build_horizon_forecast
+            prices = load_property_prices()
+            result["horizon_forecast"] = build_horizon_forecast(
+                prices,
+                merged=merged,
+                model_result=model_result,
+                policy_impact=result.get("policy_impact"),
+                start="2026-08-01",
+                end="2027-12-01",
+            )
+        except Exception:
+            result["horizon_forecast"] = None
 
     return result

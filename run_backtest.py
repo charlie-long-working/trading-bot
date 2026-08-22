@@ -27,6 +27,27 @@ def main() -> None:
     parser.add_argument("--start", type=str, default=None, help="Ngày bắt đầu backtest YYYY-MM-DD (vd 2024-01-01)")
     parser.add_argument("--end", type=str, default=None, help="Ngày kết thúc backtest YYYY-MM-DD (mặc định: hết data)")
     parser.add_argument("--bull-hold", type=float, default=0.0, metavar="PCT", help="Khi bull và không có lệnh, tính PCT%% lợi nhuận theo giá (vd 0.5 = 50%%, để gần hold hơn)")
+    parser.add_argument(
+        "--vp",
+        action="store_true",
+        help="Volume profile (POC/VAL/VAH) + order-block/FVG/zones: lọc theo vị trí giá vs POC hoặc trong value area",
+    )
+    parser.add_argument(
+        "--vp-mode",
+        type=str,
+        default="discount_premium",
+        choices=["discount_premium", "in_va"],
+        help="discount_premium: long khi close<=POC, short khi close>=POC; in_va: close trong [VAL,VAH]",
+    )
+    parser.add_argument("--vp-lookback", type=int, default=48, help="Số nến tính volume profile")
+    parser.add_argument("--vp-bins", type=int, default=32, help="Số bins giá trong profile")
+    parser.add_argument(
+        "--vp-va",
+        type=float,
+        default=0.70,
+        metavar="PCT",
+        help="Value area (0-1), mặc định 0.70",
+    )
     args = parser.parse_args()
 
     data_dir = args.data_dir
@@ -53,8 +74,15 @@ def main() -> None:
     if args.start or args.end:
         date_range = f" | Khoảng: {args.start or 'đầu data'} → {args.end or 'cuối data'}"
     bull_hold_note = f" | Bull-hold: {args.bull_hold*100:.0f}%" if args.bull_hold and args.bull_hold > 0 else ""
-    print("Backtest (regime + OB/FVG/supply-demand + volume)")
-    print(f"  Data: {data_dir} | On-chain: {'Có' if use_onchain else 'Không'} | Lookback: {args.lookback}{date_range}{bull_hold_note}\n")
+    vp_note = f" | VP: {args.vp_mode}, lookback={args.vp_lookback}, bins={args.vp_bins}, VA={args.vp_va}" if args.vp else ""
+    head = "regime + OB/FVG/supply-demand + volume"
+    if args.vp:
+        head += " + volume profile (order-flow style filter)"
+    print(f"Backtest ({head})")
+    print(
+        f"  Data: {data_dir} | On-chain: {'Có' if use_onchain else 'Không'} | "
+        f"Lookback: {args.lookback}{date_range}{bull_hold_note}{vp_note}\n"
+    )
 
     results = []
     for market_type, symbol, interval in configs:
@@ -65,6 +93,11 @@ def main() -> None:
             start_date=args.start,
             end_date=args.end,
             bull_flat_hold_pct=max(0.0, min(1.0, args.bull_hold)),
+            use_volume_profile=args.vp,
+            vp_lookback=args.vp_lookback,
+            vp_bins=args.vp_bins,
+            vp_value_area_pct=max(0.5, min(0.95, args.vp_va)),
+            vp_mode=args.vp_mode,
         )
         if r is None:
             print(f"  {market_type} {symbol} {interval}: không có dữ liệu")

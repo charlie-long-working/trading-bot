@@ -1,0 +1,88 @@
+{
+  "updated_at": "2026-08-22T09:42:31.668309+00:00",
+  "cutoffs": {
+    "crypto": "2024-01-01",
+    "vn_stock": "2024-01-01",
+    "vre": "2024-01-01"
+  },
+  "models": [
+    {
+      "model_id": "crypto_macd_rsi",
+      "asset_class": "crypto",
+      "status": "killed",
+      "last_window": "2024-01-01 → 2026-08-22",
+      "win_rate_pct": 36.36363636363637,
+      "expectancy_pct": 0.8374832222631367,
+      "num_trades": 22,
+      "return_pct": 18.424630889789007,
+      "max_drawdown_pct": 11.802592100000025,
+      "updated_at": "2026-08-22T09:42:29.158653+00:00",
+      "kill_reason": "wr=36.4% exp=0.84% (min wr 45.0%)"
+    },
+    {
+      "model_id": "crypto_smc",
+      "asset_class": "crypto",
+      "status": "killed",
+      "last_window": "2024-01-01 → 2026-08-22",
+      "win_rate_pct": 30.0,
+      "expectancy_pct": -0.09655981319772716,
+      "num_trades": 40,
+      "return_pct": -3.8623925279090865,
+      "max_drawdown_pct": 33.50010210645677,
+      "updated_at": "2026-08-22T09:42:30.112450+00:00",
+      "kill_reason": "wr=30.0% exp=-0.10% (min wr 45.0%)"
+    },
+    {
+      "model_id": "crypto_regime_fusion",
+      "asset_class": "crypto",
+      "status": "killed",
+      "last_window": "2024-01-01 → 2026-08-22",
+      "win_rate_pct": 31.363636363636367,
+      "expectancy_pct": 0.7537349000368231,
+      "num_trades": 22,
+      "return_pct": 16.582167800810108,
+      "max_drawdown_pct": 11.802592100000025,
+      "updated_at": "2026-08-22T09:42:30.112478+00:00",
+      "kill_reason": "wr=31.4% exp=0.75% (min wr 45.0%)"
+    },
+    {
+      "model_id": "vn_macd_rsi",
+      "asset_class": "vn_stock",
+      "status": "killed",
+      "last_window": "2024-01-01 → 2026-08-22",
+      "win_rate_pct": 44.91773131211093,
+      "expectancy_pct": 0.05035878380725824,
+      "num_trades": 199,
+      "return_pct": 10.021397977644389,
+      "max_drawdown_pct": 21.806913908528767,
+      "updated_at": "2026-08-22T09:42:31.668255+00:00",
+      "kill_reason": "wr=44.9% exp=0.05% (min wr 45.0%)"
+    },
+    {
+      "model_id": "vn_ma_crossover",
+      "asset_class": "vn_stock",
+      "status": "live",
+      "last_window": "2024-01-01 → 2026-08-22",
+      "win_rate_pct": 49.74358974358974,
+      "expectancy_pct": 0.031028425891436458,
+      "num_trades": 40,
+      "return_pct": 1.2411370356574583,
+      "max_drawdown_pct": 13.853540515103035,
+      "updated_at": "2026-08-22T09:42:31.668283+00:00",
+      "kill_reason": ""
+    },
+    {
+      "model_id": "vn_regime_fusion",
+      "asset_class": "vn_stock",
+      "status": "live",
+      "last_window": "2024-01-01 → 2026-08-22",
+      "win_rate_pct": 45.66694275918611,
+      "expectancy_pct": 0.12192244867244163,
+      "num_trades": 361,
+      "return_pct": 44.01400397075143,
+      "max_drawdown_pct": 26.331228574155404,
+      "updated_at": "2026-08-22T09:42:31.668300+00:00",
+      "kill_reason": ""
+    }
+  ]
+}

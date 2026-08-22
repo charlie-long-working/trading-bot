@@ -1,0 +1,371 @@
+{
+  "strategy": "macd_histogram_cross + rsi",
+  "interval": "1d",
+  "exit_mode": "pct",
+  "take_profit_pct": 0.15,
+  "stop_loss_pct": 0.07,
+  "risk_reward_tp_sl": 2.1429,
+  "params": {
+    "fast": 12,
+    "slow": 26,
+    "signal": 9,
+    "rsi_period": 14,
+    "rsi_overbought": 70.0,
+    "rsi_oversold": 30.0,
+    "atr_period": 14,
+    "atr_sl_mult": 1.5,
+    "atr_tp_mult": 2.5,
+    "fee_roundtrip": 0.001,
+    "use_ema_trend_filter": false,
+    "ema_trend_fast": 20,
+    "ema_trend_slow": 50
+  },
+  "windows": [
+    {
+      "window": "Bear 2017\u20132018",
+      "start": "2017-12-11",
+      "end": "2018-08-06",
+      "strategy_return_pct": 224.73,
+      "buy_hold_return_pct": -58.19,
+      "strategy_vs_hold_pct": 282.92,
+      "max_drawdown_pct": 7.1,
+      "num_trades": 15,
+      "win_rate": 73.3,
+      "sharpe_ratio": 14.252,
+      "profit_factor": 5.553,
+      "trades": [
+        {
+          "entry_bar": 125,
+          "exit_bar": 127,
+          "side": "short",
+          "entry": 16488.98,
+          "exit": 14015.63,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 142,
+          "exit_bar": 143,
+          "side": "long",
+          "entry": 17069.79,
+          "exit": 15874.9,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 145,
+          "exit_bar": 147,
+          "side": "short",
+          "entry": 14400.0,
+          "exit": 12240.0,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 164,
+          "exit_bar": 166,
+          "side": "long",
+          "entry": 11879.95,
+          "exit": 11048.35,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 166,
+          "exit_bar": 169,
+          "side": "short",
+          "entry": 10237.51,
+          "exit": 8701.88,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 178,
+          "exit_bar": 181,
+          "side": "long",
+          "entry": 8063.88,
+          "exit": 9273.46,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 203,
+          "exit_bar": 210,
+          "side": "short",
+          "entry": 9271.64,
+          "exit": 7880.89,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 218,
+          "exit_bar": 221,
+          "side": "long",
+          "entry": 8898.03,
+          "exit": 8275.17,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 222,
+          "exit_bar": 225,
+          "side": "short",
+          "entry": 7795.51,
+          "exit": 6626.18,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 234,
+          "exit_bar": 239,
+          "side": "long",
+          "entry": 7018.0,
+          "exit": 8070.7,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 264,
+          "exit_bar": 279,
+          "side": "short",
+          "entry": 9187.56,
+          "exit": 7809.43,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 289,
+          "exit_bar": 297,
+          "side": "long",
+          "entry": 7640.03,
+          "exit": 7105.23,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 297,
+          "exit_bar": 311,
+          "side": "short",
+          "entry": 6764.99,
+          "exit": 5750.24,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 316,
+          "exit_bar": 334,
+          "side": "long",
+          "entry": 6197.92,
+          "exit": 7127.61,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 349,
+          "exit_bar": 354,
+          "side": "short",
+          "entry": 7604.58,
+          "exit": 6934.82,
+          "reason": "end",
+          "pnl_pct": 8.707
+        }
+      ]
+    },
+    {
+      "window": "Bear 2021\u20132022",
+      "start": "2021-11-08",
+      "end": "2022-12-19",
+      "strategy_return_pct": 8.09,
+      "buy_hold_return_pct": -75.66,
+      "strategy_vs_hold_pct": 83.74,
+      "max_drawdown_pct": 26.14,
+      "num_trades": 20,
+      "win_rate": 35.0,
+      "sharpe_ratio": 1.383,
+      "profit_factor": 1.209,
+      "trades": [
+        {
+          "entry_bar": 1545,
+          "exit_bar": 1552,
+          "side": "long",
+          "entry": 66947.66,
+          "exit": 62261.32,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1585,
+          "exit_bar": 1602,
+          "side": "long",
+          "entry": 46681.23,
+          "exit": 43413.54,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1611,
+          "exit_bar": 1618,
+          "side": "long",
+          "entry": 43059.96,
+          "exit": 40045.76,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1626,
+          "exit_bar": 1635,
+          "side": "long",
+          "entry": 38166.84,
+          "exit": 43891.87,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1646,
+          "exit_bar": 1656,
+          "side": "short",
+          "entry": 39974.44,
+          "exit": 42772.65,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1656,
+          "exit_bar": 1660,
+          "side": "long",
+          "entry": 43160.0,
+          "exit": 40138.8,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1662,
+          "exit_bar": 1665,
+          "side": "short",
+          "entry": 38420.81,
+          "exit": 41110.27,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1672,
+          "exit_bar": 1684,
+          "side": "long",
+          "entry": 41114.0,
+          "exit": 47281.1,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1692,
+          "exit_bar": 1705,
+          "side": "short",
+          "entry": 45497.55,
+          "exit": 38672.92,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1721,
+          "exit_bar": 1722,
+          "side": "long",
+          "entry": 39690.0,
+          "exit": 36911.7,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1722,
+          "exit_bar": 1726,
+          "side": "short",
+          "entry": 36552.97,
+          "exit": 31070.02,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1737,
+          "exit_bar": 1760,
+          "side": "long",
+          "entry": 29201.01,
+          "exit": 27156.94,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1760,
+          "exit_bar": 1761,
+          "side": "short",
+          "entry": 26574.53,
+          "exit": 22588.35,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1773,
+          "exit_bar": 1777,
+          "side": "long",
+          "entry": 21491.19,
+          "exit": 19986.81,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1815,
+          "exit_bar": 1820,
+          "side": "short",
+          "entry": 22954.21,
+          "exit": 24561.0,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1826,
+          "exit_bar": 1836,
+          "side": "short",
+          "entry": 23342.66,
+          "exit": 19841.26,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1849,
+          "exit_bar": 1853,
+          "side": "long",
+          "entry": 21360.11,
+          "exit": 19864.9,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1858,
+          "exit_bar": 1896,
+          "side": "short",
+          "entry": 19416.18,
+          "exit": 20775.31,
+          "reason": "stop",
+          "pnl_pct": -7.1
+        },
+        {
+          "entry_bar": 1909,
+          "exit_bar": 1910,
+          "side": "short",
+          "entry": 18547.23,
+          "exit": 15765.15,
+          "reason": "target",
+          "pnl_pct": 14.9
+        },
+        {
+          "entry_bar": 1925,
+          "exit_bar": 1950,
+          "side": "long",
+          "entry": 16598.95,
+          "exit": 16438.88,
+          "reason": "end",
+          "pnl_pct": -1.064
+        }
+      ]
+    }
+  ],
+  "note": "M\u1eb7c \u0111\u1ecbnh 10%/4% t\u1ed1i \u01b0u tr\u00ean **1D**; khung 1h cho nhi\u1ec1u t\u00edn hi\u1ec7u h\u01a1n \u2014 th\u01b0\u1eddng c\u1ea7n TP/SL nh\u1ecf h\u01a1n v\u00e0 ph\u00ed round-trip \u0111\u00e1ng k\u1ec3 h\u01a1n. Ch\u1ec9nh --tp-pct / --sl-pct / --interval."
+}

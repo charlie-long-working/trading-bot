@@ -1,0 +1,103 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// © RSI Trend Dip — Chỉ giao dịch THEO XU HƯỚNG (tránh mean reversion trong trend)
+// LONG: Uptrend (price > EMA) + RSI oversold (mua dip). SHORT: Downtrend + RSI overbought (bán đỉnh).
+// TP > SL (R:R tốt). Giảm trades, tăng chất lượng.
+
+//@version=5
+strategy(
+     "RSI Trend Dip - Backtest",
+     overlay=true,
+     pyramiding=0,
+     process_orders_on_close=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100,
+     commission_type=strategy.commission.percent,
+     commission_value=0.05,
+     calc_on_every_tick=false)
+
+// ═══════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════
+
+g_trend = "Trend"
+i_emaLen = input.int(50, "EMA trend", group=g_trend, minval=20)
+
+g_rsi = "RSI"
+i_rsiLen = input.int(14, "RSI length", group=g_rsi, minval=5)
+i_rsiOversold = input.int(38, "Oversold (mua dip)", group=g_rsi, minval=25, maxval=45)
+i_rsiOverbought = input.int(62, "Overbought (bán đỉnh)", group=g_rsi, minval=55, maxval=75)
+
+g_sltp = "SL / TP (R:R > 1)"
+i_tpPct = input.float(2.5, "Take profit %", group=g_sltp, minval=1.0, step=0.5)
+i_slPct = input.float(1.5, "Stop loss %", group=g_sltp, minval=0.5, step=0.5)
+
+g_filter = "Bộ lọc"
+i_minBarsBetween = input.int(5, "Tối thiểu bars giữa 2 lệnh", group=g_filter, minval=0)
+i_allowShort = input.bool(true, "Cho phép SHORT", group=g_filter)
+
+g_plot = "Hiển thị"
+i_showEMA = input.bool(true, "Vẽ EMA", group=g_plot)
+i_showSignals = input.bool(true, "Vẽ tam giác", group=g_plot)
+
+// ═══════════════════════════════════════════════════════════════════════
+// TREND & RSI
+// ═══════════════════════════════════════════════════════════════════════
+
+ema = ta.ema(close, i_emaLen)
+rsi = ta.rsi(close, i_rsiLen)
+
+uptrend = close > ema
+downtrend = close < ema
+
+// ═══════════════════════════════════════════════════════════════════════
+// SIGNALS: Chỉ mua dip trong uptrend, bán đỉnh trong downtrend
+// ═══════════════════════════════════════════════════════════════════════
+
+longCondRaw = uptrend and rsi <= i_rsiOversold
+shortCondRaw = downtrend and rsi >= i_rsiOverbought
+
+var int lastLongBar = na
+var int lastShortBar = na
+barsSinceLong = bar_index - nz(lastLongBar, bar_index - 999)
+barsSinceShort = bar_index - nz(lastShortBar, bar_index - 999)
+
+longCond = longCondRaw and barsSinceShort >= i_minBarsBetween
+shortCond = shortCondRaw and barsSinceLong >= i_minBarsBetween and i_allowShort
+
+if longCond
+    lastLongBar := bar_index
+if shortCond
+    lastShortBar := bar_index
+
+// ═══════════════════════════════════════════════════════════════════════
+// SL / TP (R:R = 2.5/1.5 ~ 1.67)
+// ═══════════════════════════════════════════════════════════════════════
+
+longSl = close * (1 - i_slPct / 100)
+longTp = close * (1 + i_tpPct / 100)
+shortSl = close * (1 + i_slPct / 100)
+shortTp = close * (1 - i_tpPct / 100)
+
+// ═══════════════════════════════════════════════════════════════════════
+// ORDERS
+// ═══════════════════════════════════════════════════════════════════════
+
+if longCond
+    strategy.close("Short")
+    strategy.entry("Long", strategy.long)
+    strategy.exit("LongExit", from_entry="Long", stop=longSl, limit=longTp)
+
+if shortCond
+    strategy.close("Long")
+    strategy.entry("Short", strategy.short)
+    strategy.exit("ShortExit", from_entry="Short", stop=shortSl, limit=shortTp)
+
+// ═══════════════════════════════════════════════════════════════════════
+// PLOT
+// ═══════════════════════════════════════════════════════════════════════
+
+plot(i_showEMA ? ema : na, "EMA", color=color.new(#FF9800, 0), linewidth=2)
+plotshape(i_showSignals and longCond, "LONG", shape.triangleup, location.belowbar, color.new(#4CAF50, 0), size=size.small)
+plotshape(i_showSignals and shortCond, "SHORT", shape.triangledown, location.abovebar, color.new(#f44336, 0), size=size.small)
+bgcolor(uptrend ? color.new(#4CAF50, 95) : color.new(#f44336, 95))

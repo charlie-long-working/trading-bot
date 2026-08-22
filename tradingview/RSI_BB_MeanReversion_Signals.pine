@@ -1,0 +1,137 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// © RSI + BB Mean Reversion — Thiết kế cho WIN RATE CAO (60–70%+)
+// Logic: Mua khi oversold (RSI thấp, giá chạm lower BB), bán khi overbought. TP nhỏ, SL vừa.
+// Khuyến nghị: khung 1h, 4h. Hoạt động tốt trong thị trường sideways/ranging.
+
+//@version=5
+indicator("RSI BB Mean Reversion - Tín hiệu", overlay=true, max_labels_count=500, max_lines_count=2)
+
+// ═══════════════════════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════════════════════
+
+g_rsi = "RSI"
+i_rsiLen = input.int(14, "RSI length", group=g_rsi, minval=5)
+i_rsiOversold = input.int(32, "Oversold (Long)", group=g_rsi, minval=20, maxval=40)
+i_rsiOverbought = input.int(68, "Overbought (Short)", group=g_rsi, minval=60, maxval=80)
+
+g_bb = "Bollinger Bands"
+i_bbLen = input.int(20, "BB length", group=g_bb, minval=10)
+i_bbMult = input.float(2.0, "BB mult", group=g_bb, minval=1.0, step=0.1)
+
+g_sltp = "SL / TP"
+i_tpPct = input.float(1.5, "Take profit %", group=g_sltp, minval=0.5, step=0.1)
+i_slPct = input.float(2.5, "Stop loss %", group=g_sltp, minval=1.0, step=0.1)
+
+g_filter = "Bộ lọc"
+i_needReversalCandle = input.bool(true, "Cần nến đảo chiều (close>open Long, close<open Short)", group=g_filter)
+i_minBarsBetween = input.int(3, "Tối thiểu bars giữa 2 lệnh", group=g_filter, minval=0)
+
+g_plot = "Hiển thị"
+i_showBB = input.bool(true, "Vẽ Bollinger Bands", group=g_plot)
+i_showSLTP = input.bool(true, "Vẽ SL & TP", group=g_plot)
+i_slTpBars = input.int(30, "SL/TP kéo dài (bars)", group=g_plot, minval=5, maxval=100)
+
+// ═══════════════════════════════════════════════════════════════════════
+// RSI & BOLLINGER BANDS
+// ═══════════════════════════════════════════════════════════════════════
+
+rsi = ta.rsi(close, i_rsiLen)
+bbBasis = ta.sma(close, i_bbLen)
+bbDev = i_bbMult * ta.stdev(close, i_bbLen)
+upperBB = bbBasis + bbDev
+lowerBB = bbBasis - bbDev
+
+// ═══════════════════════════════════════════════════════════════════════
+// CONDITIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+// Long: RSI oversold + giá chạm/touch lower BB + (optional) nến xanh đảo chiều
+atLowerBB = low <= lowerBB * 1.002 or close <= lowerBB * 1.005
+reversalCandleLong = not i_needReversalCandle or (close > open)
+
+longCondRaw = rsi <= i_rsiOversold and atLowerBB and reversalCandleLong
+
+// Short: RSI overbought + giá chạm upper BB + (optional) nến đỏ đảo chiều
+atUpperBB = high >= upperBB * 0.998 or close >= upperBB * 0.995
+reversalCandleShort = not i_needReversalCandle or (close < open)
+
+shortCondRaw = rsi >= i_rsiOverbought and atUpperBB and reversalCandleShort
+
+// Giãn cách giữa các lệnh
+var int lastLongBar = na
+var int lastShortBar = na
+barsSinceLong = bar_index - nz(lastLongBar, bar_index - 999)
+barsSinceShort = bar_index - nz(lastShortBar, bar_index - 999)
+
+longOk = barsSinceShort >= i_minBarsBetween
+shortOk = barsSinceLong >= i_minBarsBetween
+
+longCond = longCondRaw and longOk and not shortCondRaw
+shortCond = shortCondRaw and shortOk and not longCondRaw
+
+if longCond
+    lastLongBar := bar_index
+if shortCond
+    lastShortBar := bar_index
+
+// ═══════════════════════════════════════════════════════════════════════
+// SL / TP
+// ═══════════════════════════════════════════════════════════════════════
+
+float longSl = na
+float longTp = na
+float shortSl = na
+float shortTp = na
+
+if longCond
+    longSl := close * (1 - i_slPct / 100)
+    longTp := close * (1 + i_tpPct / 100)
+if shortCond
+    shortSl := close * (1 + i_slPct / 100)
+    shortTp := close * (1 - i_tpPct / 100)
+
+// ═══════════════════════════════════════════════════════════════════════
+// VẼ ĐƯỜNG SL/TP & LABEL
+// ═══════════════════════════════════════════════════════════════════════
+
+var line slLine = na
+var line tpLine = na
+var label sigLabel = na
+
+if (longCond or shortCond) and i_showSLTP
+    if not na(slLine)
+        line.delete(slLine)
+    if not na(tpLine)
+        line.delete(tpLine)
+    if not na(sigLabel)
+        label.delete(sigLabel)
+    if longCond
+        slLine := line.new(bar_index, longSl, bar_index + i_slTpBars, longSl, color=color.red, width=2)
+        line.set_style(slLine, line.style_dashed)
+        tpLine := line.new(bar_index, longTp, bar_index + i_slTpBars, longTp, color=color.green, width=2)
+        line.set_style(tpLine, line.style_dashed)
+        sigLabel := label.new(bar_index, high, "LONG\nEntry: " + str.tostring(close, "#.##") + "\nSL: " + str.tostring(longSl, "#.##") + "\nTP: " + str.tostring(longTp, "#.##"), style=label.style_label_down, color=color.new(#4CAF50, 20), textcolor=color.white, size=size.small)
+    else
+        slLine := line.new(bar_index, shortSl, bar_index + i_slTpBars, shortSl, color=color.red, width=2)
+        line.set_style(slLine, line.style_dashed)
+        tpLine := line.new(bar_index, shortTp, bar_index + i_slTpBars, shortTp, color=color.green, width=2)
+        line.set_style(tpLine, line.style_dashed)
+        sigLabel := label.new(bar_index, low, "SHORT\nEntry: " + str.tostring(close, "#.##") + "\nSL: " + str.tostring(shortSl, "#.##") + "\nTP: " + str.tostring(shortTp, "#.##"), style=label.style_label_up, color=color.new(#f44336, 20), textcolor=color.white, size=size.small)
+
+// ═══════════════════════════════════════════════════════════════════════
+// PLOT
+// ═══════════════════════════════════════════════════════════════════════
+
+plot(i_showBB ? upperBB : na, "Upper BB", color=color.new(#9C27B0, 50), linewidth=1)
+plot(i_showBB ? bbBasis : na, "Middle BB", color=color.new(#9C27B0, 30), linewidth=1)
+plot(i_showBB ? lowerBB : na, "Lower BB", color=color.new(#9C27B0, 50), linewidth=1)
+
+plotshape(longCond, "LONG", shape.triangleup, location.belowbar, color.new(#4CAF50, 0), size=size.normal)
+plotshape(shortCond, "SHORT", shape.triangledown, location.abovebar, color.new(#f44336, 0), size=size.normal)
+
+// RSI panel (optional - uncomment to add)
+// plot(rsi, "RSI", display=display.data_window)
+
+alertcondition(longCond, "RSI BB Mean Reversion - Long", "Tín hiệu LONG (Oversold)")
+alertcondition(shortCond, "RSI BB Mean Reversion - Short", "Tín hiệu SHORT (Overbought)")

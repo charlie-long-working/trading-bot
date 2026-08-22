@@ -53,6 +53,7 @@ _load_env_file()
 
 from exchange.okx_client import OKXClient, OKXConfig, _symbol_to_inst_id
 from data_loaders.okx_klines import fetch_okx_klines
+from data_loaders.fred_m2 import get_m2_yoy
 from signals.okx_signal import get_okx_signal
 
 
@@ -142,6 +143,7 @@ def main():
 
 
 def _run_one_cycle(client, config, symbols, market_type, args, paper):
+    m2_yoy = get_m2_yoy()
     for symbol in symbols:
         try:
             klines = fetch_okx_klines(
@@ -166,6 +168,7 @@ def _run_one_cycle(client, config, symbols, market_type, args, paper):
             interval=args.interval,
             sopr=None,
             mvrv=None,
+            m2_yoy=m2_yoy,
             use_timeline_modifier=True,
         )
         if sig is None:

@@ -4,6 +4,7 @@ from .regime import Regime, RegimeClassifier, RegimeInputs
 from .rules import RuleSet, get_rules_for_regime
 from .timeline import halving_phase, is_weak_seasonal_month
 from .volume import VolumeContext, VolumeState, get_volume_context, volume_confirmation
+from .volume_profile import VolumeProfile, compute_volume_profile, vp_allows_long, vp_allows_short
 from .technical import (
     OrderBlock,
     FairValueGap,
@@ -31,6 +32,10 @@ __all__ = [
     "VolumeState",
     "get_volume_context",
     "volume_confirmation",
+    "VolumeProfile",
+    "compute_volume_profile",
+    "vp_allows_long",
+    "vp_allows_short",
     "OrderBlock",
     "FairValueGap",
     "Zone",

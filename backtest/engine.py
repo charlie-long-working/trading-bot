@@ -75,6 +75,11 @@ def run_backtest(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     bull_flat_hold_pct: float = 0.0,
+    use_volume_profile: bool = False,
+    vp_lookback: int = 48,
+    vp_bins: int = 32,
+    vp_value_area_pct: float = 0.70,
+    vp_mode: str = "discount_premium",
 ) -> Optional[BacktestResult]:
     """
     Run backtest on merged klines from data_dir.
@@ -84,6 +89,7 @@ def run_backtest(
     - start_date / end_date: optional "YYYY-MM-DD" to only trade in that range (inclusive); None = no limit.
     - use_onchain: if True, load SOPR/MVRV from Glassnode (or cache) and pass to regime classifier.
     - bull_flat_hold_pct: when regime is BULL and no position, capture this fraction of bar return (0=off, 0.5=50% hold khi flat) to reduce gap vs buy-and-hold.
+    - use_volume_profile + vp_*: filter OB/FVG/zone entries by rolling volume-at-price (POC/VAL/VAH); see signals.fusion.get_signal.
     """
     out = load_merged_klines(data_dir, market_type, symbol, interval)
     if out is None:
@@ -180,6 +186,11 @@ def run_backtest(
                 zone_lookback=min(50, i),
                 sopr=sopr_i,
                 mvrv=mvrv_i,
+                use_volume_profile=use_volume_profile,
+                vp_lookback=vp_lookback,
+                vp_bins=vp_bins,
+                vp_value_area_pct=vp_value_area_pct,
+                vp_mode=vp_mode,
             )
             regime = res.regime
             rules = get_rules_for_regime(regime)

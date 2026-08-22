@@ -1,0 +1,106 @@
+{
+  "macd_rsi_params": {
+    "exit": "pct",
+    "tp": 0.1,
+    "sl": 0.04,
+    "fee": 0.001,
+    "ema_trend": "EMA20>EMA50 & close>EMA50 \u2192 bull long; EMA20<EMA50 & close<EMA50 \u2192 bear short"
+  },
+  "smc_params": {
+    "entry": "edge_touch_ob_or_fvg_or_zone",
+    "tp": 0.1,
+    "sl": 0.04,
+    "fee": 0.001,
+    "ob_lookback": 50,
+    "fvg_lookback": 30,
+    "zone_lookback": 50,
+    "ema_trend": "same as MACD"
+  },
+  "windows": [
+    {
+      "window": "Bear 2017\u20132018",
+      "start": "2017-12-11",
+      "end": "2018-08-06",
+      "data": "spot CSV",
+      "macd_rsi": {
+        "strategy": "macd_rsi",
+        "return_pct": 17.07,
+        "buy_hold_pct": -58.19,
+        "vs_hold_pct": 75.26,
+        "max_drawdown_pct": 4.1,
+        "num_trades": 6,
+        "win_rate": 50.0,
+        "profit_factor": 2.415,
+        "sharpe_approx": 6.577
+      },
+      "smc_zones": {
+        "strategy": "smc_ob_fvg_zones",
+        "return_pct": -20.53,
+        "buy_hold_pct": -58.19,
+        "vs_hold_pct": 37.66,
+        "max_drawdown_pct": 21.38,
+        "num_trades": 12,
+        "win_rate": 16.7,
+        "profit_factor": 0.483,
+        "sharpe_approx": -5.375
+      }
+    },
+    {
+      "window": "Bear 2021\u20132022",
+      "start": "2021-11-08",
+      "end": "2022-12-19",
+      "data": "spot CSV",
+      "macd_rsi": {
+        "strategy": "macd_rsi",
+        "return_pct": 13.36,
+        "buy_hold_pct": -75.66,
+        "vs_hold_pct": 89.02,
+        "max_drawdown_pct": 15.5,
+        "num_trades": 11,
+        "win_rate": 36.4,
+        "profit_factor": 1.603,
+        "sharpe_approx": 3.28
+      },
+      "smc_zones": {
+        "strategy": "smc_ob_fvg_zones",
+        "return_pct": -27.63,
+        "buy_hold_pct": -75.66,
+        "vs_hold_pct": 48.02,
+        "max_drawdown_pct": 38.84,
+        "num_trades": 24,
+        "win_rate": 20.8,
+        "profit_factor": 0.635,
+        "sharpe_approx": -3.304
+      }
+    },
+    {
+      "window": "Oct 2025 \u2192 nay (API \u0111\u1ebfn 2026-03-25)",
+      "start": "2025-10-01",
+      "end": "2026-03-25",
+      "data": "binance_api",
+      "warmup_from": "2025-08-01",
+      "macd_rsi": {
+        "strategy": "macd_rsi",
+        "return_pct": 11.08,
+        "buy_hold_pct": -40.36,
+        "vs_hold_pct": 51.44,
+        "max_drawdown_pct": 4.1,
+        "num_trades": 4,
+        "win_rate": 50.0,
+        "profit_factor": 2.415,
+        "sharpe_approx": 6.577
+      },
+      "smc_zones": {
+        "strategy": "smc_ob_fvg_zones",
+        "return_pct": -2.03,
+        "buy_hold_pct": -40.36,
+        "vs_hold_pct": 38.33,
+        "max_drawdown_pct": 8.03,
+        "num_trades": 7,
+        "win_rate": 28.6,
+        "profit_factor": 0.966,
+        "sharpe_approx": -0.251
+      }
+    }
+  ]
+}

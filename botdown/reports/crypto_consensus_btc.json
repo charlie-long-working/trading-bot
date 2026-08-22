@@ -1,0 +1,226 @@
+{
+  "symbol": "BTCUSDT",
+  "interval": "1d",
+  "close": 70861.35,
+  "data_cutoff": "2024-01-01",
+  "consensus": {
+    "side": "none",
+    "tier": "none",
+    "vote_count": 0,
+    "combined_confidence": 0.0,
+    "tie_breaker": null,
+    "entry_price": 0.0,
+    "stop_loss": null,
+    "take_profit": null
+  },
+  "votes": [
+    {
+      "strategy": "liquidation_map",
+      "side": "short",
+      "confidence": 0.4969,
+      "reason": "long_cascade_cluster"
+    }
+  ],
+  "liquidation_map": {
+    "symbol": "BTCUSDT",
+    "mark": 76987.542,
+    "ts_utc": "2026-08-22T15:13:21.203702+00:00",
+    "source": "reconstructed_oi_ls",
+    "lookback": "72h",
+    "oi_usd": 14221374930.52,
+    "long_frac": 0.6128,
+    "short_frac": 0.3872,
+    "long_short_ratio": 1.5824,
+    "nearby_pct": 0.03,
+    "nearby_long_usd": 1472175031.28,
+    "nearby_short_usd": 994114871.39,
+    "nearby_long_pct_oi": 10.352,
+    "nearby_short_pct_oi": 6.99,
+    "nearest_long_cluster": {
+      "mid": 74677.92,
+      "usd": 338011800.24,
+      "pct_from_mark": -3.0
+    },
+    "nearest_short_cluster": {
+      "mid": 78142.36,
+      "usd": 248968239.96,
+      "pct_from_mark": 1.5
+    },
+    "max_pain": {
+      "mid": 73523.1,
+      "usd": 563832893.94,
+      "pct_from_mark": -4.5,
+      "dominant": "long"
+    },
+    "vote_side": "short",
+    "vote_confidence": 0.4969,
+    "vote_reason": "long_cascade_cluster",
+    "stop_loss": 78142.36,
+    "take_profit": 74677.92,
+    "exchanges": {
+      "bybit": {
+        "mark": 76979.6,
+        "oi_usd": 3724587124.77,
+        "long_frac": 0.5476
+      },
+      "binance": {
+        "mark": 76988.2366,
+        "oi_usd": 8190202542.26,
+        "long_frac": 0.6694
+      },
+      "okx": {
+        "mark": 76997.9,
+        "oi_usd": 2306585263.49,
+        "long_frac": 0.5169
+      }
+    },
+    "errors": [],
+    "top_clusters": [
+      {
+        "price_lo": 73330.63,
+        "price_hi": 73715.57,
+        "mid": 73523.1,
+        "long_usd": 446339860.58,
+        "short_usd": 117493033.37,
+        "total_usd": 563832893.94,
+        "long_pct_oi": 3.139,
+        "short_pct_oi": 0.826,
+        "pct_from_mark": -4.5,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 74100.51,
+        "price_hi": 74485.45,
+        "mid": 74292.98,
+        "long_usd": 360051396.88,
+        "short_usd": 127137876.56,
+        "total_usd": 487189273.44,
+        "long_pct_oi": 2.532,
+        "short_pct_oi": 0.894,
+        "pct_from_mark": -3.5,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 70636.07,
+        "price_hi": 71021.01,
+        "mid": 70828.54,
+        "long_usd": 403352621.07,
+        "short_usd": 75365767.34,
+        "total_usd": 478718388.41,
+        "long_pct_oi": 2.836,
+        "short_pct_oi": 0.53,
+        "pct_from_mark": -8.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 75640.26,
+        "price_hi": 76025.2,
+        "mid": 75832.73,
+        "long_usd": 307829033.09,
+        "short_usd": 141349712.62,
+        "total_usd": 449178745.71,
+        "long_pct_oi": 2.165,
+        "short_pct_oi": 0.994,
+        "pct_from_mark": -1.5,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 75255.32,
+        "price_hi": 75640.26,
+        "mid": 75447.79,
+        "long_usd": 283849908.14,
+        "short_usd": 152468603.33,
+        "total_usd": 436318511.47,
+        "long_pct_oi": 1.996,
+        "short_pct_oi": 1.072,
+        "pct_from_mark": -2.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 76795.07,
+        "price_hi": 77180.01,
+        "mid": 76987.54,
+        "long_usd": 368328969.93,
+        "short_usd": 60256053.91,
+        "total_usd": 428585023.84,
+        "long_pct_oi": 2.59,
+        "short_pct_oi": 0.424,
+        "pct_from_mark": 0.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 74485.45,
+        "price_hi": 74870.38,
+        "mid": 74677.92,
+        "long_usd": 338011800.24,
+        "short_usd": 88318089.14,
+        "total_usd": 426329889.38,
+        "long_pct_oi": 2.377,
+        "short_pct_oi": 0.621,
+        "pct_from_mark": -3.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 69866.19,
+        "price_hi": 70251.13,
+        "mid": 70058.66,
+        "long_usd": 311133946.53,
+        "short_usd": 98833937.61,
+        "total_usd": 409967884.14,
+        "long_pct_oi": 2.188,
+        "short_pct_oi": 0.695,
+        "pct_from_mark": -9.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 76025.2,
+        "price_hi": 76410.14,
+        "mid": 76217.67,
+        "long_usd": 201813082.41,
+        "short_usd": 190871205.96,
+        "total_usd": 392684288.37,
+        "long_pct_oi": 1.419,
+        "short_pct_oi": 1.342,
+        "pct_from_mark": -1.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 71790.88,
+        "price_hi": 72175.82,
+        "mid": 71983.35,
+        "long_usd": 276110841.43,
+        "short_usd": 105941369.47,
+        "total_usd": 382052210.9,
+        "long_pct_oi": 1.942,
+        "short_pct_oi": 0.745,
+        "pct_from_mark": -6.5,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 72175.82,
+        "price_hi": 72560.76,
+        "mid": 72368.29,
+        "long_usd": 202794297.48,
+        "short_usd": 169584678.18,
+        "total_usd": 372378975.66,
+        "long_pct_oi": 1.426,
+        "short_pct_oi": 1.192,
+        "pct_from_mark": -6.0,
+        "dominant": "long"
+      },
+      {
+        "price_lo": 77564.95,
+        "price_hi": 77949.89,
+        "mid": 77757.42,
+        "long_usd": 196032943.72,
+        "short_usd": 150162450.94,
+        "total_usd": 346195394.66,
+        "long_pct_oi": 1.378,
+        "short_pct_oi": 1.056,
+        "pct_from_mark": 1.0,
+        "dominant": "long"
+      }
+    ]
+  },
+  "registry_live": []
+}

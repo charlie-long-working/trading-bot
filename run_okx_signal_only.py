@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from exchange.okx_client import OKXClient
 from data_loaders.okx_klines import fetch_okx_klines
+from data_loaders.fred_m2 import get_m2_yoy
 from signals.okx_signal import get_okx_signal, format_okx_signal_for_telegram
 
 
@@ -31,6 +32,7 @@ def main():
     market_type = "um" if args.market == "swap" else args.market
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
     client = OKXClient(config=None)
+    m2_yoy = get_m2_yoy()
 
     for symbol in symbols:
         try:
@@ -55,6 +57,7 @@ def main():
             symbol=symbol,
             market_type=market_type,
             interval=args.interval,
+            m2_yoy=m2_yoy,
             use_timeline_modifier=True,
         )
         if sig is None:

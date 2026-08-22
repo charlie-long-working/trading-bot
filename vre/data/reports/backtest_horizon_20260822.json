@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-08-22T16:26:58.832526",
+  "window": "2025-11 → 2026-08",
+  "metrics": {
+    "national": {
+      "n": 10,
+      "mae_vnd": 4365441.0,
+      "mape_pct": 17.21,
+      "rmse_pct": 24.55,
+      "direction_accuracy_pct": 33.3
+    },
+    "regional": {
+      "n": 50,
+      "mae_vnd": 4365441.0,
+      "mape_pct": 18.2,
+      "rmse_pct": 26.09,
+      "direction_accuracy_pct": null
+    }
+  },
+  "note": "actual_kind=observed: mốc CSV 6 tháng; interpolated: giữa các mốc; extrapolated: sau 01/2026 theo tốc độ implied Jul→Jan (chưa có mốc 07/2026)."
+}

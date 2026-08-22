@@ -1,0 +1,93 @@
+{
+  "mode": "mtf_d1_h4_h1_execute_on_daily",
+  "params": {
+    "d1_ma_fast": 20,
+    "d1_ma_slow": 50,
+    "d1_ma_trend": 120,
+    "h4_ma_fast": 10,
+    "h4_ma_slow": 34,
+    "h1_rsi_period": 14,
+    "h1_rsi_entry_cross": 52.0,
+    "h1_rsi_exit": 40.0,
+    "stop_pct": 0.03,
+    "take_profit_pct": 0.08,
+    "fee_roundtrip": 0.001,
+    "cooldown_days_after_exit": 1,
+    "h4_rsi_entry_min": 38.0
+  },
+  "windows": [
+    {
+      "window": "Bear 2017\u20132018",
+      "start": "2017-12-11",
+      "end": "2018-08-06",
+      "total_return_pct": 20.11,
+      "buy_hold_pct": -58.19,
+      "max_drawdown_pct": 0.0,
+      "num_trades": 3,
+      "win_rate": 100.0,
+      "trades": [
+        {
+          "entry_bar": 191,
+          "exit_bar": 192,
+          "entry": 10131.04,
+          "exit": 9320.56,
+          "reason": "target",
+          "pnl_pct": 7.9
+        },
+        {
+          "entry_bar": 224,
+          "exit_bar": 225,
+          "entry": 7949.3,
+          "exit": 7313.36,
+          "reason": "target",
+          "pnl_pct": 7.9
+        },
+        {
+          "entry_bar": 284,
+          "exit_bar": 285,
+          "entry": 7338.99,
+          "exit": 7099.0,
+          "reason": "rsi",
+          "pnl_pct": 3.17
+        }
+      ]
+    },
+    {
+      "window": "Bear 2021\u20132022",
+      "start": "2021-11-08",
+      "end": "2022-12-19",
+      "total_return_pct": -1.43,
+      "buy_hold_pct": -75.66,
+      "max_drawdown_pct": 6.1,
+      "num_trades": 3,
+      "win_rate": 33.3,
+      "trades": [
+        {
+          "entry_bar": 1643,
+          "exit_bar": 1644,
+          "entry": 42535.94,
+          "exit": 43812.02,
+          "reason": "stop",
+          "pnl_pct": -3.1
+        },
+        {
+          "entry_bar": 1744,
+          "exit_bar": 1747,
+          "entry": 29201.35,
+          "exit": 30077.39,
+          "reason": "stop",
+          "pnl_pct": -3.1
+        },
+        {
+          "entry_bar": 1846,
+          "exit_bar": 1847,
+          "entry": 19795.34,
+          "exit": 18790.61,
+          "reason": "rsi",
+          "pnl_pct": 4.976
+        }
+      ]
+    }
+  ],
+  "logic": "Cu\u1ed1i ng\u00e0y UTC: D1 bear, H4 bear + H4 RSI>=h4_rsi_entry_min, n\u1ebfn H1 cu\u1ed1i c\u1ee7a ng\u00e0y c\u00f3 RSI c\u1eaft l\u00ean; v\u00e0o open D1 ng\u00e0y k\u1ebf. Tho\u00e1t: stop/tp/RSI tr\u00ean n\u1ebfn D1."
+}
