@@ -70,16 +70,29 @@ class ScenarioResult:
         return asdict(self)
 
 
-def enrich_features(panel: "pd.DataFrame", bars_per_day: int = 1) -> "pd.DataFrame":
+def enrich_features(
+    panel: "pd.DataFrame",
+    bars_per_day: int = 1,
+    z_calendar_days: Optional[int] = None,
+) -> "pd.DataFrame":
     """
     Feature names keep daily meaning: oi_chg_3 = OI change over ~3 calendar days.
     EMA 20/50/200 stay native to the bar timeframe.
+
+    If z_calendar_days is None, adapt z window down to fit available bars
+    (needed when Binance OI hist only ~20–30d on GHA fallback).
     """
     df = panel.copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date").reset_index(drop=True)
     b = max(int(bars_per_day), 1)
-    d1, d3, d7, d30 = b, 3 * b, 7 * b, 30 * b
+    n = len(df)
+    if z_calendar_days is None:
+        max_z = max(7, (n - 40) // b) if n > 80 else 7
+        z_days = min(30, max_z)
+    else:
+        z_days = max(7, int(z_calendar_days))
+    d1, d3, d7, d30 = b, 3 * b, 7 * b, z_days * b
     hh = 20  # native TF swing
 
     df["ret_1"] = df["close"].pct_change(d1)
@@ -129,6 +142,7 @@ def enrich_features(panel: "pd.DataFrame", bars_per_day: int = 1) -> "pd.DataFra
         df["usdtd_risk_on"] = False
 
     df.attrs["bars_per_day"] = b
+    df.attrs["z_calendar_days"] = z_days
     return df
 
 

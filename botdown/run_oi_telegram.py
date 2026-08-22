@@ -97,6 +97,7 @@ def main() -> int:
     new_keys: Set[str] = set()
     sent = 0
     scanned = 0
+    errors = 0
 
     print(f"Intervals={intervals} symbols={symbols} dry_run={args.dry_run}")
     for symbol in symbols:
@@ -109,7 +110,13 @@ def main() -> int:
                     include_liq=not args.no_liq,
                 )
             except Exception as e:
+                errors += 1
                 print(f"ERR {symbol} {interval}: {e}", file=sys.stderr)
+                continue
+
+            if alert.features.get("error"):
+                errors += 1
+                print(f"ERR {symbol} {interval}: {alert.features.get('error')}")
                 continue
 
             if alert.side == "none":
@@ -138,6 +145,7 @@ def main() -> int:
                 new_keys.add(key)
                 print(f"SENT {alert.side} {symbol} {interval} @ {alert.bar_time}")
             else:
+                errors += 1
                 print(f"SEND FAIL {symbol} {interval}: {err}", file=sys.stderr)
 
     if dedupe and new_keys and not args.dry_run:
@@ -146,7 +154,10 @@ def main() -> int:
     elif args.dry_run and new_keys:
         print(f"(dry-run) would cache {len(new_keys)} keys")
 
-    print(f"Done scanned={scanned} alerts={sent}")
+    print(f"Done scanned={scanned} alerts={sent} errors={errors}")
+    # Fail job if every scan errored (e.g. Bybit 403 without fallback)
+    if scanned > 0 and errors >= scanned and sent == 0:
+        return 1
     return 0
 
 

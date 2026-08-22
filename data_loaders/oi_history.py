@@ -33,7 +33,14 @@ REPORTS_DIR = ROOT / "botdown" / "reports"
 
 BYBIT = "https://api.bybit.com"
 BINANCE_FAPI = "https://fapi.binance.com"
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; oi-history/1.1)"}
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json,text/plain,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 INTERVAL_MS = {"1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000}
 INTERVAL_HOURS = {"1h": 1, "4h": 4, "1d": 24}
@@ -57,6 +64,12 @@ def _get(url: str, params: Optional[dict] = None, timeout: int = 30, retries: in
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             with opener.open(req, timeout=timeout) as r:
                 return json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            last_err = e
+            # 403/418 often IP/WAF; retry then give up
+            time.sleep(0.5 * (attempt + 1))
+            if e.code in (403, 418, 451) and attempt == retries - 1:
+                break
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
             last_err = e
             time.sleep(0.4 * (attempt + 1))
@@ -362,6 +375,54 @@ def save_panel_reports(
     return path
 
 
+def fetch_binance_oi_hist(
+    symbol: str = "BTCUSDT",
+    period: str = "1h",
+    max_pages: int = 6,
+) -> "pd.DataFrame":
+    """
+    Binance public OI hist (~30d retention). Paginate backward with endTime.
+    Column oi_btc = sumOpenInterest (base contracts).
+    """
+    if pd is None:
+        raise RuntimeError("pip install pandas")
+    rows = []
+    end = None
+    for _ in range(max_pages):
+        params: dict = {"symbol": symbol, "period": period, "limit": 500}
+        if end is not None:
+            params["endTime"] = end
+        try:
+            data = _get(f"{BINANCE_FAPI}/futures/data/openInterestHist", params)
+        except Exception as e:
+            print(f"  [bn oi] stop: {e}")
+            break
+        if not isinstance(data, list) or not data:
+            break
+        rows.extend(data)
+        end = int(data[0]["timestamp"]) - 1
+        if len(data) < 500:
+            break
+        time.sleep(0.12)
+    if not rows:
+        return pd.DataFrame(columns=["date", "oi_btc", "oi_usd"])
+    out = []
+    seen = set()
+    for r in rows:
+        ts = int(r["timestamp"])
+        if ts in seen:
+            continue
+        seen.add(ts)
+        out.append(
+            {
+                "date": _ms_to_naive(ts),
+                "oi_btc": float(r["sumOpenInterest"]),
+                "oi_usd": float(r.get("sumOpenInterestValue") or 0.0),
+            }
+        )
+    return pd.DataFrame(out).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+
+
 def build_oi_panel_recent(
     symbol: str = "BTCUSDT",
     interval: str = "1h",
@@ -370,7 +431,7 @@ def build_oi_panel_recent(
     """
     Lightweight panel for live alerts: last `lookback_bars` only (no full 2022 crawl).
 
-    Enough history for EMA200 + calendar 30d z-scores on 1h/4h.
+    Prefer Bybit OI; on 403/WAF (common on GitHub Actions IPs) fall back to Binance OI hist.
     """
     if pd is None:
         raise RuntimeError("pip install pandas")
@@ -378,16 +439,34 @@ def build_oi_panel_recent(
         raise ValueError(f"interval must be one of {list(INTERVAL_MS)}")
 
     hours = INTERVAL_HOURS[interval]
-    # +10% buffer for gaps / incomplete merge
     lookback_h = int(lookback_bars * hours * 1.15) + 48
     now = datetime.now(timezone.utc)
     start_dt = now - pd.Timedelta(hours=lookback_h)
     start = start_dt.strftime("%Y-%m-%d")
 
     print(f"[oi_history] recent {symbol} {interval} lookback≈{lookback_bars} from {start}...")
-    oi = fetch_bybit_oi(symbol, interval=interval, start=start)
     px = fetch_binance_klines(symbol, interval=interval, start=start)
     fund = fetch_binance_funding(symbol, start=start)
+
+    oi = pd.DataFrame(columns=["date", "oi_btc"])
+    oi_source = "none"
+    try:
+        oi = fetch_bybit_oi(symbol, interval=interval, start=start)
+        if len(oi):
+            oi_source = "bybit"
+    except Exception as e:
+        print(f"  [oi] Bybit failed ({e}); falling back to Binance OI hist")
+
+    if oi.empty or oi["oi_btc"].isna().all():
+        bn = fetch_binance_oi_hist(symbol, period=BN_OI_PERIOD[interval])
+        if len(bn):
+            oi = bn[["date", "oi_btc"]].copy()
+            oi_source = "binance"
+            # Binance ~30d: trim lookback expectation
+            lookback_bars = min(lookback_bars, len(oi) + 50)
+
+    if oi.empty:
+        raise RuntimeError(f"No OI data for {symbol} {interval} (Bybit+Binance failed)")
 
     panel = px.sort_values("date").reset_index(drop=True)
     oi = oi.sort_values("date")
@@ -395,10 +474,10 @@ def build_oi_panel_recent(
     panel = pd.merge_asof(panel, oi, on="date", direction="backward", tolerance=tol)
     panel = _align_funding(panel, fund, interval)
     panel["oi_usd"] = panel["oi_btc"] * panel["close"]
+    panel["oi_source"] = oi_source
 
     try:
         from data_loaders.usdt_d import build_usdt_d_daily
-        # Warm USDT.D from ~90d before lookback for z/rolling
         usdtd_start = (start_dt - pd.Timedelta(days=120)).strftime("%Y-%m-%d")
         usdtd = build_usdt_d_daily(start=usdtd_start, force_refresh=False)
         usdtd = usdtd.sort_values("date")
@@ -414,5 +493,8 @@ def build_oi_panel_recent(
     panel = panel.dropna(subset=["oi_btc", "close"]).sort_values("date").reset_index(drop=True)
     if len(panel) > lookback_bars:
         panel = panel.iloc[-lookback_bars:].reset_index(drop=True)
-    print(f"[oi_history] recent rows={len(panel)}  {panel['date'].min()} → {panel['date'].max()}")
+    print(
+        f"[oi_history] recent rows={len(panel)} source={oi_source}  "
+        f"{panel['date'].min()} → {panel['date'].max()}"
+    )
     return panel

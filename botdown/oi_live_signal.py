@@ -97,7 +97,7 @@ def scan_oi_live(
     if "usdt_d_z_30" in df.columns:
         need.append("usdt_d_z_30")
     df = df.dropna(subset=[c for c in need if c in df.columns]).reset_index(drop=True)
-    if len(df) < 50:
+    if len(df) < 20:
         return OiAlert(
             symbol=symbol,
             interval=interval,
