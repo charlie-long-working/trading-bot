@@ -23,6 +23,7 @@ description: >-
 | Task | Touch |
 |------|--------|
 | Live OI alert text / I+K | `botdown/oi_live_signal.py` |
+| Live playbook dashboard | `botdown/dashboard_oi_playbook.py` (`python run_strategy_dashboard.py`) |
 | OI scenario definitions | `botdown/oi_liq_strategy.py` |
 | Fetch OI/klines/funding (GHA) | `data_loaders/oi_history.py` |
 | USDT.D | `data_loaders/usdt_d.py` |

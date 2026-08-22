@@ -19,6 +19,10 @@ export PYTHONPATH=.
 ## Most-used commands
 
 ```bash
+# Live playbook dashboard (I+K, TP/SL, scan BTC/ETH)
+python run_strategy_dashboard.py
+# hoặc: PYTHONPATH=. streamlit run botdown/dashboard_oi_playbook.py
+
 # Live OI alerts (same as GitHub Actions)
 python -m botdown.run_oi_telegram --dry-run --interval auto
 
