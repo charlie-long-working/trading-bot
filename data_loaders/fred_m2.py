@@ -22,12 +22,12 @@ try:
 except ImportError:
     Fred = None
 
-# Cache M2 under data/fred; optionally read sibling stock/vre FRED CSV
+# Cache M2 under data/fred; optionally read sibling real-estate FRED CSV
 REPO_ROOT = Path(__file__).resolve().parent.parent
-_STOCK_FRED = REPO_ROOT.parent / "stock" / "vre" / "data" / "fred"
+_RE_FRED = REPO_ROOT.parent / "real-estate" / "vre" / "data" / "fred"
 CACHE_DIR = REPO_ROOT / "data" / "fred"
-if not (CACHE_DIR / "M2SL.csv").exists() and (_STOCK_FRED / "M2SL.csv").exists():
-    CACHE_DIR = _STOCK_FRED
+if not (CACHE_DIR / "M2SL.csv").exists() and (_RE_FRED / "M2SL.csv").exists():
+    CACHE_DIR = _RE_FRED
 else:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
