@@ -94,7 +94,8 @@ def scan_oi_live(
 
     df = enrich_features(panel, bars_per_day=bpd)
     need = ["oi_z_30", "fund_z_30", "ema50"]
-    if "usdt_d_z_30" in df.columns:
+    # Only require USDT.D z when real values exist (else column is all-NaN → dropna wipes panel)
+    if "usdt_d" in df.columns and df["usdt_d"].notna().sum() > 50:
         need.append("usdt_d_z_30")
     df = df.dropna(subset=[c for c in need if c in df.columns]).reset_index(drop=True)
     if len(df) < 20:
