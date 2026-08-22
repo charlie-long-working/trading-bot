@@ -4,10 +4,13 @@ Historical BTC open interest + funding + klines panel (2022 → now).
 Sources (public, no paid key):
   - Bybit linear OI (1d / 4h / 1h) — full history from 2022
   - Binance USDT-M funding rate (8h) → as-of onto each bar
-  - Binance USDT-M klines (1d / 4h / 1h)
+  - Binance USDT-M klines (1d / 4h / 1h); spot / Bybit fallbacks for GHA
+  - Gate.io contract_stats OI when Bybit/Binance futures are blocked (403/451)
   - USDT.D daily (DefiLlama + CMC), forward-filled onto intraday bars
 
 Binance openInterestHist only keeps ~30 days publicly; joined when available.
+GitHub Actions often sees Binance fapi HTTP 451 and Bybit OI 403 — live path
+uses spot klines + Gate OI + Bybit funding.
 """
 
 from __future__ import annotations
@@ -33,6 +36,9 @@ REPORTS_DIR = ROOT / "botdown" / "reports"
 
 BYBIT = "https://api.bybit.com"
 BINANCE_FAPI = "https://fapi.binance.com"
+BINANCE_SPOT = "https://api.binance.com"
+BINANCE_DATA = "https://data-api.binance.vision"
+GATE = "https://api.gateio.ws"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -47,7 +53,16 @@ INTERVAL_HOURS = {"1h": 1, "4h": 4, "1d": 24}
 BARS_PER_DAY = {"1h": 24, "4h": 6, "1d": 1}
 REPORT_SUFFIX = {"1h": "1h", "4h": "4h", "1d": "daily"}
 BYBIT_OI_INTERVAL = {"1h": "1h", "4h": "4h", "1d": "1d"}
+BYBIT_KLINE_INTERVAL = {"1h": "60", "4h": "240", "1d": "D"}
 BN_OI_PERIOD = {"1h": "1h", "4h": "4h", "1d": "1d"}
+GATE_STATS_INTERVAL = {"1h": "1h", "4h": "4h", "1d": "1d"}
+
+
+def _gate_contract(symbol: str) -> str:
+    s = symbol.upper().replace("_", "")
+    if s.endswith("USDT"):
+        return f"{s[:-4]}_USDT"
+    return symbol.replace("USDT", "_USDT")
 
 
 def _get(url: str, params: Optional[dict] = None, timeout: int = 30, retries: int = 3) -> dict | list:
@@ -199,31 +214,7 @@ def fetch_binance_funding_daily(symbol: str = "BTCUSDT", start: str = "2022-01-0
     return daily
 
 
-def fetch_binance_klines(
-    symbol: str = "BTCUSDT",
-    interval: str = "1d",
-    start: str = "2022-01-01",
-) -> "pd.DataFrame":
-    if pd is None:
-        raise RuntimeError("pip install pandas")
-    if interval not in INTERVAL_MS:
-        raise ValueError(f"interval must be one of {list(INTERVAL_MS)}")
-    start_ms = _start_ms(start)
-    rows = []
-    cur = start_ms
-    while True:
-        data = _get(
-            f"{BINANCE_FAPI}/fapi/v1/klines",
-            {"symbol": symbol, "interval": interval, "startTime": cur, "limit": 1500},
-        )
-        if not data:
-            break
-        rows.extend(data)
-        cur = int(data[-1][0]) + 1
-        if len(data) < 1500:
-            break
-        time.sleep(0.1)
-
+def _klines_from_binance_rows(rows: list) -> "pd.DataFrame":
     out = []
     for r in rows:
         out.append(
@@ -234,16 +225,257 @@ def fetch_binance_klines(
                 "low": float(r[3]),
                 "close": float(r[4]),
                 "volume": float(r[5]),
-                "quote_volume": float(r[7]),
+                "quote_volume": float(r[7]) if len(r) > 7 else float(r[5]) * float(r[4]),
             }
         )
-    df = pd.DataFrame(out).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+    return pd.DataFrame(out).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+
+
+def _fetch_binance_klines_from(
+    base_url: str,
+    path: str,
+    symbol: str,
+    interval: str,
+    start: str,
+    limit: int = 1500,
+) -> "pd.DataFrame":
+    if pd is None:
+        raise RuntimeError("pip install pandas")
+    start_ms = _start_ms(start)
+    rows: list = []
+    cur = start_ms
+    while True:
+        data = _get(
+            f"{base_url}{path}",
+            {"symbol": symbol, "interval": interval, "startTime": cur, "limit": limit},
+        )
+        if not data:
+            break
+        rows.extend(data)
+        cur = int(data[-1][0]) + 1
+        if len(data) < limit:
+            break
+        time.sleep(0.1)
+    if not rows:
+        return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume", "quote_volume"])
+    return _klines_from_binance_rows(rows)
+
+
+def fetch_binance_klines(
+    symbol: str = "BTCUSDT",
+    interval: str = "1d",
+    start: str = "2022-01-01",
+) -> "pd.DataFrame":
+    if interval not in INTERVAL_MS:
+        raise ValueError(f"interval must be one of {list(INTERVAL_MS)}")
+    df = _fetch_binance_klines_from(BINANCE_FAPI, "/fapi/v1/klines", symbol, interval, start)
     print(f"  [klines {interval}] {len(df)} bars  {df['date'].min()} → {df['date'].max()}")
     return df
 
 
+def fetch_binance_spot_klines(
+    symbol: str = "BTCUSDT",
+    interval: str = "1d",
+    start: str = "2022-01-01",
+) -> "pd.DataFrame":
+    """Spot klines — usually reachable when fapi returns HTTP 451 on cloud IPs."""
+    if interval not in INTERVAL_MS:
+        raise ValueError(f"interval must be one of {list(INTERVAL_MS)}")
+    last_err: Exception | None = None
+    for base in (BINANCE_SPOT, BINANCE_DATA):
+        try:
+            df = _fetch_binance_klines_from(base, "/api/v3/klines", symbol, interval, start, limit=1000)
+            if len(df):
+                print(
+                    f"  [klines spot {interval}] {len(df)} bars  "
+                    f"{df['date'].min()} → {df['date'].max()}  ({base})"
+                )
+                return df
+        except Exception as e:
+            last_err = e
+            print(f"  [klines spot] {base} failed: {e}")
+    raise RuntimeError(f"Binance spot klines failed: {last_err}")
+
+
+def fetch_bybit_klines(
+    symbol: str = "BTCUSDT",
+    interval: str = "1d",
+    start: str = "2022-01-01",
+) -> "pd.DataFrame":
+    if pd is None:
+        raise RuntimeError("pip install pandas")
+    if interval not in INTERVAL_MS:
+        raise ValueError(f"interval must be one of {list(INTERVAL_MS)}")
+    start_ms = _start_ms(start)
+    end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    iv = BYBIT_KLINE_INTERVAL[interval]
+    rows: list = []
+    cursor_end = end_ms
+    while cursor_end > start_ms:
+        data = _get(
+            f"{BYBIT}/v5/market/kline",
+            {
+                "category": "linear",
+                "symbol": symbol,
+                "interval": iv,
+                "start": start_ms,
+                "end": cursor_end,
+                "limit": 1000,
+            },
+        )
+        lst = (data.get("result") or {}).get("list") or []
+        if not lst:
+            break
+        # Bybit returns newest first
+        chunk = list(reversed(lst))
+        rows.extend(chunk)
+        oldest = int(chunk[0][0])
+        if oldest <= start_ms or len(lst) < 1000:
+            break
+        cursor_end = oldest - 1
+        time.sleep(0.08)
+    if not rows:
+        return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume", "quote_volume"])
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "date": _ms_to_naive(int(r[0])),
+                "open": float(r[1]),
+                "high": float(r[2]),
+                "low": float(r[3]),
+                "close": float(r[4]),
+                "volume": float(r[5]),
+                "quote_volume": float(r[6]) if len(r) > 6 else float(r[5]) * float(r[4]),
+            }
+        )
+    df = pd.DataFrame(out).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+    print(f"  [klines bybit {interval}] {len(df)} bars  {df['date'].min()} → {df['date'].max()}")
+    return df
+
+
+def fetch_klines_resilient(
+    symbol: str = "BTCUSDT",
+    interval: str = "1d",
+    start: str = "2022-01-01",
+) -> "pd.DataFrame":
+    """Prefer spot (GHA-safe) → Bybit → Binance fapi."""
+    errors: list[str] = []
+    for name, fn in (
+        ("spot", fetch_binance_spot_klines),
+        ("bybit", fetch_bybit_klines),
+        ("fapi", fetch_binance_klines),
+    ):
+        try:
+            df = fn(symbol, interval=interval, start=start)
+            if len(df):
+                return df
+            errors.append(f"{name}: empty")
+        except Exception as e:
+            errors.append(f"{name}: {e}")
+            print(f"  [klines] {name} unavailable: {e}")
+    raise RuntimeError(f"All kline sources failed for {symbol} {interval}: {'; '.join(errors)}")
+
+
 def fetch_binance_klines_daily(symbol: str = "BTCUSDT", start: str = "2022-01-01") -> "pd.DataFrame":
     return fetch_binance_klines(symbol, interval="1d", start=start)
+
+
+def fetch_bybit_funding(symbol: str = "BTCUSDT", start: str = "2022-01-01") -> "pd.DataFrame":
+    if pd is None:
+        raise RuntimeError("pip install pandas")
+    start_ms = _start_ms(start)
+    end_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    rows: list = []
+    cursor_end = end_ms
+    while cursor_end > start_ms:
+        data = _get(
+            f"{BYBIT}/v5/market/funding/history",
+            {
+                "category": "linear",
+                "symbol": symbol,
+                "startTime": start_ms,
+                "endTime": cursor_end,
+                "limit": 200,
+            },
+        )
+        lst = (data.get("result") or {}).get("list") or []
+        if not lst:
+            break
+        rows.extend(lst)
+        # newest-first page → walk older via endTime
+        oldest = min(int(r["fundingRateTimestamp"]) for r in lst)
+        if oldest <= start_ms or len(lst) < 200:
+            break
+        cursor_end = oldest - 1
+        time.sleep(0.08)
+    if not rows:
+        return pd.DataFrame(columns=["date", "funding"])
+    return pd.DataFrame(
+        {
+            "date": [_ms_to_naive(int(r["fundingRateTimestamp"])) for r in rows],
+            "funding": [float(r["fundingRate"]) for r in rows],
+        }
+    ).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+
+
+def fetch_gate_oi(
+    symbol: str = "BTCUSDT",
+    interval: str = "1h",
+    lookback_bars: int = 1000,
+) -> "pd.DataFrame":
+    """
+    Gate.io futures contract_stats — works when Binance fapi/Bybit OI are blocked.
+    oi_btc ≈ open_interest_usd / mark_price (coin-equivalent for %Δ / z-score).
+    """
+    if pd is None:
+        raise RuntimeError("pip install pandas")
+    if interval not in GATE_STATS_INTERVAL:
+        raise ValueError(f"interval must be one of {list(GATE_STATS_INTERVAL)}")
+    contract = _gate_contract(symbol)
+    limit = min(max(int(lookback_bars) + 50, 100), 1000)
+    data = _get(
+        f"{GATE}/api/v4/futures/usdt/contract_stats",
+        {"contract": contract, "interval": GATE_STATS_INTERVAL[interval], "limit": limit},
+    )
+    if not isinstance(data, list) or not data:
+        return pd.DataFrame(columns=["date", "oi_btc", "funding"])
+    out = []
+    for r in data:
+        mark = float(r.get("mark_price") or 0.0)
+        oi_usd = float(r.get("open_interest_usd") or 0.0)
+        if mark <= 0 and oi_usd <= 0:
+            continue
+        oi_btc = oi_usd / mark if mark > 0 else float(r.get("open_interest") or 0.0)
+        out.append(
+            {
+                "date": _ms_to_naive(int(r["time"]) * 1000),
+                "oi_btc": oi_btc,
+                "funding": float(r.get("last_funding_rate") or 0.0),
+            }
+        )
+    df = pd.DataFrame(out).drop_duplicates("date").sort_values("date").reset_index(drop=True)
+    print(f"  [oi gate {interval}] {len(df)} bars  {df['date'].min()} → {df['date'].max()}")
+    return df
+
+
+def fetch_funding_resilient(symbol: str = "BTCUSDT", start: str = "2022-01-01") -> "pd.DataFrame":
+    """Bybit funding → Binance fapi; empty frame if both fail (panel uses zeros)."""
+    try:
+        fund = fetch_bybit_funding(symbol, start=start)
+        if len(fund):
+            print(f"  [funding] bybit rows={len(fund)}")
+            return fund
+    except Exception as e:
+        print(f"  [funding] Bybit failed: {e}")
+    try:
+        fund = fetch_binance_funding(symbol, start=start)
+        if len(fund):
+            print(f"  [funding] binance rows={len(fund)}")
+            return fund
+    except Exception as e:
+        print(f"  [funding] Binance failed: {e}")
+    return pd.DataFrame(columns=["date", "funding"])
 
 
 def fetch_binance_oi_recent(symbol: str = "BTCUSDT", period: str = "1d") -> "pd.DataFrame":
@@ -431,7 +663,10 @@ def build_oi_panel_recent(
     """
     Lightweight panel for live alerts: last `lookback_bars` only (no full 2022 crawl).
 
-    Prefer Bybit OI; on 403/WAF (common on GitHub Actions IPs) fall back to Binance OI hist.
+    Resilient for GitHub Actions:
+      klines: Binance spot → Bybit → fapi (fapi often HTTP 451 on GHA)
+      OI: Bybit → Binance hist → Gate contract_stats (Bybit OI often 403 on GHA)
+      funding: Bybit → Binance fapi → Gate last_funding_rate / zeros
     """
     if pd is None:
         raise RuntimeError("pip install pandas")
@@ -445,28 +680,43 @@ def build_oi_panel_recent(
     start = start_dt.strftime("%Y-%m-%d")
 
     print(f"[oi_history] recent {symbol} {interval} lookback≈{lookback_bars} from {start}...")
-    px = fetch_binance_klines(symbol, interval=interval, start=start)
-    fund = fetch_binance_funding(symbol, start=start)
+    px = fetch_klines_resilient(symbol, interval=interval, start=start)
+    fund = fetch_funding_resilient(symbol, start=start)
 
     oi = pd.DataFrame(columns=["date", "oi_btc"])
     oi_source = "none"
+    gate_fund: "pd.DataFrame | None" = None
     try:
         oi = fetch_bybit_oi(symbol, interval=interval, start=start)
         if len(oi):
             oi_source = "bybit"
     except Exception as e:
-        print(f"  [oi] Bybit failed ({e}); falling back to Binance OI hist")
+        print(f"  [oi] Bybit failed ({e}); trying Binance / Gate")
 
     if oi.empty or oi["oi_btc"].isna().all():
         bn = fetch_binance_oi_hist(symbol, period=BN_OI_PERIOD[interval])
         if len(bn):
             oi = bn[["date", "oi_btc"]].copy()
             oi_source = "binance"
-            # Binance ~30d: trim lookback expectation
             lookback_bars = min(lookback_bars, len(oi) + 50)
 
+    if oi.empty or oi["oi_btc"].isna().all():
+        try:
+            gate = fetch_gate_oi(symbol, interval=interval, lookback_bars=lookback_bars)
+            if len(gate):
+                oi = gate[["date", "oi_btc"]].copy()
+                oi_source = "gate"
+                if fund.empty and "funding" in gate.columns:
+                    gate_fund = gate[["date", "funding"]].dropna()
+        except Exception as e:
+            print(f"  [oi] Gate failed: {e}")
+
     if oi.empty:
-        raise RuntimeError(f"No OI data for {symbol} {interval} (Bybit+Binance failed)")
+        raise RuntimeError(f"No OI data for {symbol} {interval} (Bybit+Binance+Gate failed)")
+
+    if fund.empty and gate_fund is not None and len(gate_fund):
+        fund = gate_fund.rename(columns={"funding": "funding"})
+        print(f"  [funding] gate rows={len(fund)}")
 
     panel = px.sort_values("date").reset_index(drop=True)
     oi = oi.sort_values("date")
