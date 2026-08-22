@@ -25,11 +25,30 @@ from data_loaders.oi_history import build_oi_panel_recent
 
 # Live playbook: K primary, I secondary (no G on H1/H4)
 LIVE_SCENARIOS = [
-    ("K_oi_usdtd_confluence", "OI + USDT.D + EMA confluence", signal_oi_usdtd_confluence),
-    ("I_usdtd_risk_off_short", "USDT.D↑ risk-off + fund+ → SHORT", signal_usdtd_risk_off_short),
+    (
+        "K_oi_usdtd_confluence",
+        "OI + USDT.D + EMA cùng hướng (ưu tiên)",
+        signal_oi_usdtd_confluence,
+    ),
+    (
+        "I_usdtd_risk_off_short",
+        "USDT.D risk-off + funding dương → SHORT",
+        signal_usdtd_risk_off_short,
+    ),
 ]
 
 DEFAULT_LOOKBACK = {"1h": 800, "4h": 500, "1d": 400}
+
+# Human-readable entry rules (shown in Telegram)
+SCENARIO_WHY = {
+    "K_oi_usdtd_confluence": (
+        "LONG: EMA bull + OI↑3d>1.5% + USDT.D↓ (Δ3d<-0.2 hoặc z<-1) + fund z<-0.5. "
+        "SHORT: EMA bear + OI↑3d>2% + USDT.D↑ (Δ3d>+0.2 hoặc z>1) + fund z>0.3."
+    ),
+    "I_usdtd_risk_off_short": (
+        "SHORT khi USDT.D risk-off (Δ3d>+0.15 hoặc z>1) + fund z>0.5 + oi z>-0.5."
+    ),
+}
 
 
 @dataclass
@@ -186,44 +205,61 @@ def scan_oi_live(
 
 
 def format_oi_telegram(alert: OiAlert) -> Optional[str]:
-    """HTML message for Telegram; None if no side."""
+    """HTML message for Telegram; None if no side. Includes why + entry/SL/TP from entry."""
     if alert.side == "none":
         return None
-    side_u = alert.side.upper()
     tag = "🟢 LONG" if alert.side == "long" else "🔴 SHORT"
-    scen_html = ", ".join(f"<code>{a['scenario']}</code>" for a in alert.scenarios) or "—"
     f = alert.features
-    rr_line = ""
-    if alert.sl_pct:
-        rr_line = (
-            f"Plan exit: TP {alert.tp_pct*100:.1f}% / SL {alert.sl_pct*100:.1f}% "
-            f"(R:R {alert.tp_pct/alert.sl_pct:.2f}:1)"
-        )
+    entry = float(alert.entry if alert.entry is not None else alert.close)
+    stop = float(alert.stop if alert.stop is not None else entry)
+    target = float(alert.target if alert.target is not None else entry)
+    tp_pct = float(alert.tp_pct or 0.0)
+    sl_pct = float(alert.sl_pct or 0.0)
+    rr = (tp_pct / sl_pct) if sl_pct else 0.0
+
+    if alert.side == "long":
+        stop = entry * (1.0 - sl_pct)
+        target = entry * (1.0 + tp_pct)
+        sl_note = f"entry − {sl_pct*100:.1f}%"
+        tp_note = f"entry + {tp_pct*100:.1f}%"
+    else:
+        stop = entry * (1.0 + sl_pct)
+        target = entry * (1.0 - tp_pct)
+        sl_note = f"entry + {sl_pct*100:.1f}%"
+        tp_note = f"entry − {tp_pct*100:.1f}%"
+
+    scen_blocks: List[str] = []
+    for a in alert.scenarios:
+        name = a.get("scenario", "")
+        desc = a.get("desc") or SCENARIO_WHY.get(name, "")
+        why = SCENARIO_WHY.get(name, "")
+        scen_blocks.append(f"• <code>{name}</code> — {desc}")
+        if why:
+            scen_blocks.append(f"  → {why}")
+
     lines = [
         f"<b>{tag}</b> {alert.symbol} · <b>{alert.interval}</b>",
         f"Bar: <code>{alert.bar_time}</code>",
         "",
-        f"Close: <code>{alert.close:,.2f}</code>",
-        f"Entry~ <code>{alert.entry}</code> | SL <code>{alert.stop}</code> | TP <code>{alert.target}</code>",
+        "<b>Kế hoạch lệnh</b>",
+        f"Entry: <code>{entry:,.2f}</code> (≈ close)",
+        f"SL: <code>{stop:,.2f}</code> ({sl_note})",
+        f"TP: <code>{target:,.2f}</code> ({tp_note})",
+        f"R:R {rr:.2f}:1 · bảng TF {alert.interval}: TP {tp_pct*100:.1f}% / SL {sl_pct*100:.1f}%",
+        "",
+        "<b>Vào theo điều kiện</b>",
     ]
-    if rr_line:
-        lines.append(rr_line)
+    if scen_blocks:
+        lines.extend(scen_blocks)
+    else:
+        lines.append("—")
     lines.extend([
         "",
-        f"Scenarios: {scen_html}",
+        "<b>Snapshot</b>",
         f"OI Δ3d: {f.get('oi_chg_3_pct')}% | z30: {f.get('oi_z_30')} | fund z: {f.get('funding_z_30')}",
         f"USDT.D: {f.get('usdt_d')}% (Δ3d {f.get('usdt_d_chg_3')}, z {f.get('usdt_d_z_30')})",
         f"EMA: <b>{f.get('regime_ema')}</b> | risk-off={f.get('usdtd_risk_off')} risk-on={f.get('usdtd_risk_on')}",
+        "",
+        "<i>ALERT ONLY — not investment advice. Playbook I+K H1/H4.</i>",
     ])
-    liq = alert.liq or {}
-    if liq and not liq.get("error"):
-        nl = (liq.get("nearest_long_cluster") or {}).get("mid", "—")
-        ns = (liq.get("nearest_short_cluster") or {}).get("mid", "—")
-        lines.extend([
-            "",
-            "<b>Liq map</b>",
-            f"Long cluster (below): <code>{nl}</code> | Short (above): <code>{ns}</code>",
-            f"Vote: {liq.get('vote_side', 'none')} — {liq.get('vote_reason', '')}",
-        ])
-    lines.extend(["", "<i>ALERT ONLY — not investment advice. Playbook I+K H1/H4.</i>"])
     return "\n".join(lines)
