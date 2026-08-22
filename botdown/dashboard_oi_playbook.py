@@ -2,7 +2,8 @@
 Streamlit dashboard — live OI playbook (I + K) currently applied on GHA/Telegram.
 
   cd Trading-bot
-  PYTHONPATH=. streamlit run botdown/dashboard_oi_playbook.py
+  python3 run_strategy_dashboard.py
+  # hoặc: PYTHONPATH=. streamlit run botdown/dashboard_oi_playbook.py
 """
 
 from __future__ import annotations
@@ -11,9 +12,21 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+# Streamlit inserts this file's directory (botdown/) at sys.path[0], which shadows
+# the top-level `strategy` package with botdown/strategy.py. Fix before imports.
+_ROOT = Path(__file__).resolve().parents[1]
+_BOTDOWN = Path(__file__).resolve().parent
+_clean: list[str] = []
+for _p in sys.path:
+    try:
+        if Path(_p).resolve() == _BOTDOWN.resolve():
+            continue
+    except OSError:
+        pass
+    _clean.append(_p)
+sys.path[:] = _clean
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import streamlit as st
 
