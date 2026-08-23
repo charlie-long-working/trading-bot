@@ -2,7 +2,28 @@
 
 ---
 
-## RSI Trend Dip (khuyến nghị cho BTC/crypto) — `RSI_Trend_Dip_Signals.pine` / `RSI_Trend_Dip_Strategy.pine`
+## OI + USDT.D (playbook live I+K) — `OI_USDTD_Signals.pine` / `OI_USDTD_Strategy.pine`
+
+Khớp logic `botdown/oi_live_signal.py` + Telegram alerts (K ưu tiên, I secondary).
+
+| Thành phần | Nguồn trên TradingView |
+|------------|------------------------|
+| **Open Interest** | `BINANCE:BTCUSDT.P_OI` (auto `_OI` suffix) |
+| **Funding z** | Proxy từ `BINANCE:BTCUSDT_PREMIUM` (≠ funding thật 100%) |
+| **USDT.D** | `CRYPTOCAP:USDT.D` (daily, ffill lên H1/H4) |
+| **TP/SL** | 1h: 1.5%/0.6% · 4h: 4%/1.5% |
+
+**Cách dùng**
+
+1. Chart **`BINANCE:BTCUSDT.P`** hoặc **`BINANCE:ETHUSDT.P`** (perpetual).
+2. Khung **1h** hoặc **4h** (khớp backtest Python).
+3. Pine Editor → dán `OI_USDTD_Signals.pine` → Add to chart.
+4. Bảng góc phải: OI Δ3d, fund z, USDT.D, signal. Alert: **OI+USDT.D LONG/SHORT**.
+5. Backtest trên TV: dán `OI_USDTD_Strategy.pine` → Strategy Tester.
+
+**Lưu ý:** WR/profit trên TV **không trùng** backtest Python (OI Bybit vs Binance, USDT.D DefiLlama vs CRYPTOCAP, funding proxy). Nguồn “chuẩn” vẫn là `run_oi_scenarios` + Telegram GHA.
+
+---
 
 **Chỉ giao dịch theo xu hướng:** LONG khi uptrend (price > EMA) + RSI oversold (mua dip). SHORT khi downtrend + RSI overbought (bán đỉnh). Tránh mean reversion ngược trend → giảm thua trong thị trường trending như BTC.
 

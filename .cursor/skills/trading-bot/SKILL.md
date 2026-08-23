@@ -8,7 +8,7 @@ description: >-
 
 # Trading-bot (crypto)
 
-**Read this first** instead of scanning the whole tree. Details: [architecture.md](architecture.md), [entrypoints.md](entrypoints.md). Workspace sibling: `stock/` (VN only). Related: skill `crypto-oi-usdtd` for OI playbook math.
+**Read this first** instead of scanning the whole tree. Details: [architecture.md](architecture.md), [entrypoints.md](entrypoints.md). Workspace siblings: `stock/` (VN), `precious-metals/` (gold/silver). Related: skill `crypto-oi-usdtd` for OI playbook math.
 
 ## Agent rules (save context)
 

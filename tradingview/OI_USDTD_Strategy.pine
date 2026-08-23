@@ -1,0 +1,76 @@
+// OI + USDT.D Strategy — backtest trên TradingView (K ưu tiên, I secondary)
+// Chart: BINANCE:BTCUSDT.P · 1h hoặc 4h. Xem OI_USDTD_Signals.pine để biết giới hạn dữ liệu.
+
+//@version=5
+strategy("OI + USDT.D Strategy (I+K)", overlay=true, pyramiding=0,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=100,
+     commission_type=strategy.commission.percent, commission_value=0.04,
+     initial_capital=1000, currency=currency.USD)
+
+g_data = "Dữ liệu"
+i_oiTicker = input.string("", "OI ticker (trống = auto)", group=g_data)
+i_usdtDTicker = input.string("CRYPTOCAP:USDT.D", "USDT.D", group=g_data)
+i_premiumTicker = input.string("", "Premium proxy", group=g_data)
+
+g_exit = "Exit playbook"
+i_autoTpSl = input.bool(true, "TP/SL auto theo TF", group=g_exit)
+i_tp1h = input.float(1.5, "TP % 1h", group=g_exit, step=0.1) * 0.01
+i_sl1h = input.float(0.6, "SL % 1h", group=g_exit, step=0.1) * 0.01
+i_tp4h = input.float(4.0, "TP % 4h", group=g_exit, step=0.1) * 0.01
+i_sl4h = input.float(1.5, "SL % 4h", group=g_exit, step=0.1) * 0.01
+i_maxHold = input.int(48, "Max hold (bars)", group=g_exit, minval=1)
+
+tfSec = timeframe.in_seconds()
+barsPerDay = tfSec > 0 ? math.max(1, int(86400 / tfSec)) : 1
+d3 = 3 * barsPerDay
+d30 = 30 * barsPerDay
+is4h = tfSec >= 14400
+tpPct = i_autoTpSl ? (is4h ? i_tp4h : i_tp1h) : i_tp1h
+slPct = i_autoTpSl ? (is4h ? i_sl4h : i_sl1h) : i_sl1h
+
+oiSym = i_oiTicker != "" ? i_oiTicker : syminfo.prefix + ":" + syminfo.ticker + "_OI"
+oi = request.security(oiSym, timeframe.period, close, ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+premSym = i_premiumTicker != "" ? i_premiumTicker : "BINANCE:" + syminfo.basecurrency + "USDT_PREMIUM"
+fundProxy = request.security(premSym, timeframe.period, close, ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+usdtDChg3 = request.security(i_usdtDTicker, "D", close - close[3], lookahead=barmerge.lookahead_off)
+usdtDZ30 = request.security(i_usdtDTicker, "D", (close - ta.sma(close, 30)) / ta.stdev(close, 30), lookahead=barmerge.lookahead_off)
+
+ema20 = ta.ema(close, 20)
+ema50 = ta.ema(close, 50)
+bull = ema20 > ema50 and close > ema50
+bear = ema20 < ema50 and close < ema50
+oiChg3 = oi[d3] != 0 and not na(oi[d3]) ? (oi - oi[d3]) / oi[d3] : na
+oiZ30 = (oi - ta.sma(oi, d30)) / ta.stdev(oi, d30)
+fundZ30 = (fundProxy - ta.sma(fundProxy, d30)) / ta.stdev(fundProxy, d30)
+usdtdRiskOff = usdtDChg3 > 0.15 or usdtDZ30 > 1.0
+
+kLong = bull and oiChg3 > 0.015 and (usdtDChg3 < -0.2 or usdtDZ30 < -1.0) and fundZ30 < -0.5
+kShort = bear and oiChg3 > 0.02 and (usdtDChg3 > 0.2 or usdtDZ30 > 1.0) and fundZ30 > 0.3
+iShort = usdtdRiskOff and fundZ30 > 0.5 and oiZ30 > -0.5
+
+wantLong = kLong
+wantShort = kShort or (not kLong and not kShort and iShort)
+
+var int entryBar = na
+if strategy.position_size == 0
+    entryBar := na
+
+if strategy.position_size == 0 and not na(oi) and not na(fundZ30)
+    if wantLong
+        strategy.entry("L", strategy.long)
+        entryBar := bar_index
+    if wantShort
+        strategy.entry("S", strategy.short)
+        entryBar := bar_index
+
+if strategy.position_size > 0
+    ep = strategy.position_avg_price
+    strategy.exit("L-x", "L", stop=ep * (1.0 - slPct), limit=ep * (1.0 + tpPct))
+    if not na(entryBar) and bar_index - entryBar >= i_maxHold
+        strategy.close("L", comment="time")
+
+if strategy.position_size < 0
+    ep = strategy.position_avg_price
+    strategy.exit("S-x", "S", stop=ep * (1.0 + slPct), limit=ep * (1.0 - tpPct))
+    if not na(entryBar) and bar_index - entryBar >= i_maxHold
+        strategy.close("S", comment="time")

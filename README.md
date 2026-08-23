@@ -2,7 +2,7 @@
 
 Crypto trading: **OI + USDT.D Telegram alerts**, OKX Regime Fusion bot, MACD/RSI backtests.
 
-VN stocks / VRE → sibling repo [`stock/`](../stock).  
+VN stocks → [`stock/`](../stock). VRE / BĐS → [`real-estate/`](../real-estate).  
 **Agents:** read `.cursor/skills/trading-bot/SKILL.md` (also under workspace `.cursor/skills/`).  
 **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

@@ -1,0 +1,165 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0.
+// OI + USDT.D live playbook (K primary, I secondary) — khớp botdown/oi_live_signal.py + oi_liq_strategy.py
+// Chart: BINANCE:BTCUSDT.P hoặc ETHUSDT.P · khung 1h hoặc 4h.
+//
+// GIỚI HẠN so với backtest Python:
+//   • OI: TV = Binance perp OI; Python = Bybit (+ fallback). Số liệu có thể lệch.
+//   • Funding z: TV dùng Premium Index (proxy); Python = funding rate thật.
+//   • USDT.D: TV = CRYPTOCAP (CMC-style); Python = DefiLlama USDT mcap / total.
+//   • USDT.D daily ffill lên H1/H4 — giống Python.
+//   • Backtest TV ≠ backtest Python; dùng để quan sát / alert, không kỳ vọng WR giống hệt.
+
+//@version=5
+indicator("OI + USDT.D (I+K)", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// ── Inputs ───────────────────────────────────────────────────────────────────
+g_data = "Dữ liệu ngoài"
+i_oiTicker = input.string("", "OI ticker (để trống = auto _OI)", group=g_data,
+     tooltip="VD: BINANCE:BTCUSDT.P_OI. Trống → prefix:ticker_OI")
+i_usdtDTicker = input.string("CRYPTOCAP:USDT.D", "USDT.D", group=g_data)
+i_premiumTicker = input.string("", "Premium / funding proxy", group=g_data,
+     tooltip="Trống → BINANCE:BASEUSDT_PREMIUM")
+
+g_tf = "Exit theo khung (playbook)"
+i_autoTpSl = input.bool(true, "TP/SL auto theo chart TF", group=g_tf)
+i_tp1h = input.float(1.5, "TP % (1h)", group=g_tf, step=0.1) * 0.01
+i_sl1h = input.float(0.6, "SL % (1h)", group=g_tf, step=0.1) * 0.01
+i_tp4h = input.float(4.0, "TP % (4h)", group=g_tf, step=0.1) * 0.01
+i_sl4h = input.float(1.5, "SL % (4h)", group=g_tf, step=0.1) * 0.01
+
+g_sig = "Tín hiệu"
+i_showK = input.bool(true, "K OI+USDT.D confluence", group=g_sig)
+i_showI = input.bool(true, "I USDT.D risk-off SHORT", group=g_sig)
+i_kOverI = input.bool(true, "Ưu tiên K khi cùng bar", group=g_sig)
+
+g_plot = "Hiển thị"
+i_showEma = input.bool(true, "EMA 20/50", group=g_plot)
+i_showSLTP = input.bool(true, "Vẽ SL/TP", group=g_plot)
+i_showTable = input.bool(true, "Bảng snapshot", group=g_plot)
+i_slTpBars = input.int(48, "SL/TP kéo dài (bars)", group=g_plot, minval=5)
+
+// ── Calendar windows (3d / 30d) on current TF ────────────────────────────────
+tfSec = timeframe.in_seconds()
+barsPerDay = tfSec > 0 ? math.max(1, int(86400 / tfSec)) : 1
+d3 = 3 * barsPerDay
+d30 = 30 * barsPerDay
+
+// ── External series ──────────────────────────────────────────────────────────
+oiSym = i_oiTicker != "" ? i_oiTicker : syminfo.prefix + ":" + syminfo.ticker + "_OI"
+oi = request.security(oiSym, timeframe.period, close, ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+
+premSym = i_premiumTicker != "" ? i_premiumTicker : "BINANCE:" + syminfo.basecurrency + "USDT_PREMIUM"
+fundProxy = request.security(premSym, timeframe.period, close, ignore_invalid_symbol=true, lookahead=barmerge.lookahead_off)
+
+usdtD = request.security(i_usdtDTicker, "D", close, lookahead=barmerge.lookahead_off)
+usdtDChg3 = request.security(i_usdtDTicker, "D", close - close[3], lookahead=barmerge.lookahead_off)
+usdtDZ30 = request.security(i_usdtDTicker, "D", (close - ta.sma(close, 30)) / ta.stdev(close, 30), lookahead=barmerge.lookahead_off)
+
+// ── Features (match enrich_features) ─────────────────────────────────────────
+ema20 = ta.ema(close, 20)
+ema50 = ta.ema(close, 50)
+bull = ema20 > ema50 and close > ema50
+bear = ema20 < ema50 and close < ema50
+
+oiChg3 = oi[d3] != 0 and not na(oi[d3]) ? (oi - oi[d3]) / oi[d3] : na
+oiZ30 = (oi - ta.sma(oi, d30)) / ta.stdev(oi, d30)
+fundZ30 = (fundProxy - ta.sma(fundProxy, d30)) / ta.stdev(fundProxy, d30)
+
+usdtdRiskOff = usdtDChg3 > 0.15 or usdtDZ30 > 1.0
+usdtdRiskOn = usdtDChg3 < -0.15 or usdtDZ30 < -1.0
+
+dataOk = not na(oi) and not na(fundZ30) and not na(usdtD)
+
+// ── K + I signals (oi_liq_strategy.py) ───────────────────────────────────────
+kLong = bull and oiChg3 > 0.015 and (usdtDChg3 < -0.2 or usdtDZ30 < -1.0) and fundZ30 < -0.5
+kShort = bear and oiChg3 > 0.02 and (usdtDChg3 > 0.2 or usdtDZ30 > 1.0) and fundZ30 > 0.3
+iShort = usdtdRiskOff and fundZ30 > 0.5 and oiZ30 > -0.5
+
+kFire = i_showK and dataOk and (kLong or kShort)
+iFire = i_showI and dataOk and iShort
+
+sideK = kLong ? 1 : kShort ? -1 : 0
+sideI = iShort ? -1 : 0
+
+side = 0
+scen = ""
+if i_kOverI and kFire
+    side := sideK
+    scen := "K"
+else if iFire
+    side := sideI
+    scen := "I"
+else if kFire
+    side := sideK
+    scen := "K"
+
+longSig = side == 1
+shortSig = side == -1
+
+// ── TP / SL ──────────────────────────────────────────────────────────────────
+is4h = tfSec >= 14400
+tpPct = i_autoTpSl ? (is4h ? i_tp4h : i_tp1h) : i_tp1h
+slPct = i_autoTpSl ? (is4h ? i_sl4h : i_sl1h) : i_sl1h
+
+longSl = close * (1.0 - slPct)
+longTp = close * (1.0 + tpPct)
+shortSl = close * (1.0 + slPct)
+shortTp = close * (1.0 - tpPct)
+
+// ── Plot EMA ─────────────────────────────────────────────────────────────────
+plot(i_showEma ? ema20 : na, "EMA20", color=color.new(color.teal, 0), linewidth=1)
+plot(i_showEma ? ema50 : na, "EMA50", color=color.new(color.orange, 0), linewidth=1)
+
+// ── Labels + SL/TP lines ─────────────────────────────────────────────────────
+var line slLine = na
+var line tpLine = na
+
+f_del_lines() =>
+    if not na(slLine)
+        line.delete(slLine)
+    if not na(tpLine)
+        line.delete(tpLine)
+
+if longSig
+    f_del_lines()
+    label.new(bar_index, low, "🟢 LONG " + scen + "\nK/I OI+USDT.D", style=label.style_label_up,
+         color=color.new(color.green, 10), textcolor=color.white, size=size.small)
+    if i_showSLTP
+        slLine := line.new(bar_index, longSl, bar_index + i_slTpBars, longSl, color=color.red, width=2)
+        tpLine := line.new(bar_index, longTp, bar_index + i_slTpBars, longTp, color=color.green, width=2)
+
+if shortSig
+    f_del_lines()
+    label.new(bar_index, high, "🔴 SHORT " + scen + "\nK/I OI+USDT.D", style=label.style_label_down,
+         color=color.new(color.red, 10), textcolor=color.white, size=size.small)
+    if i_showSLTP
+        slLine := line.new(bar_index, shortSl, bar_index + i_slTpBars, shortSl, color=color.red, width=2)
+        tpLine := line.new(bar_index, shortTp, bar_index + i_slTpBars, shortTp, color=color.green, width=2)
+
+// ── Snapshot table ───────────────────────────────────────────────────────────
+var table t = table.new(position.top_right, 2, 9, border_width=1)
+if i_showTable and barstate.islast
+    table.cell(t, 0, 0, "OI+USDT.D", bgcolor=color.new(color.gray, 70), text_color=color.white)
+    table.cell(t, 1, 0, syminfo.ticker, bgcolor=color.new(color.gray, 70), text_color=color.white)
+    table.cell(t, 0, 1, "OI Δ3d", text_color=color.white)
+    table.cell(t, 1, 1, na(oiChg3) ? "n/a" : str.tostring(oiChg3 * 100, "#.##") + "%", text_color=color.white)
+    table.cell(t, 0, 2, "OI z30", text_color=color.white)
+    table.cell(t, 1, 2, na(oiZ30) ? "n/a" : str.tostring(oiZ30, "#.##"), text_color=color.white)
+    table.cell(t, 0, 3, "Fund z30*", text_color=color.white)
+    table.cell(t, 1, 3, na(fundZ30) ? "n/a" : str.tostring(fundZ30, "#.##"), text_color=color.white)
+    table.cell(t, 0, 4, "USDT.D", text_color=color.white)
+    table.cell(t, 1, 4, na(usdtD) ? "n/a" : str.tostring(usdtD, "#.###") + "%", text_color=color.white)
+    table.cell(t, 0, 5, "USDT Δ3d", text_color=color.white)
+    table.cell(t, 1, 5, na(usdtDChg3) ? "n/a" : str.tostring(usdtDChg3, "#.###"), text_color=color.white)
+    table.cell(t, 0, 6, "Regime", text_color=color.white)
+    regTxt = bull ? "bull" : bear ? "bear" : "neutral"
+    table.cell(t, 1, 6, regTxt, text_color=bull ? color.lime : bear ? color.red : color.white)
+    table.cell(t, 0, 7, "Signal", text_color=color.white)
+    sigTxt = longSig ? "LONG " + scen : shortSig ? "SHORT " + scen : "none"
+    table.cell(t, 1, 7, sigTxt, text_color=longSig ? color.lime : shortSig ? color.red : color.gray)
+    table.cell(t, 0, 8, "Data", text_color=color.white)
+    table.cell(t, 1, 8, dataOk ? "OK" : "MISSING OI?", text_color=dataOk ? color.lime : color.orange)
+
+// ── Alerts ───────────────────────────────────────────────────────────────────
+alertcondition(longSig, "OI+USDT.D LONG", "LONG {{ticker}} · scenario K/I")
+alertcondition(shortSig, "OI+USDT.D SHORT", "SHORT {{ticker}} · scenario K/I")

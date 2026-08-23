@@ -1,6 +1,6 @@
 # Trading-bot architecture
 
-Crypto-only. VN equities / VRE live in sibling repo `../stock`.
+Crypto-only. VN equities → `../stock`. VRE / property → `../real-estate`.
 
 ## Mental model (3 live stacks)
 
@@ -60,4 +60,4 @@ Crypto-only. VN equities / VRE live in sibling repo `../stock`.
 3. **One MACD engine** — `botdown/engine_macd_rsi_bt.py`; do not revive `archive/botv2` MACD.
 4. **One TV→OKX webhook** — `botdown/tradingview_okx_webhook.py`.
 5. **Reports** — write under `botdown/reports/`; caches under `data/`.
-6. **VN code** — never reintroduce under this repo; use `stock/`.
+6. **VN / VRE code** — never reintroduce under this repo; use `stock/` (equities) or `real-estate/` (property).
