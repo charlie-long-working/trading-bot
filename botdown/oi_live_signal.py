@@ -22,7 +22,7 @@ from botdown.oi_liq_strategy import (
     signal_oi_usdtd_confluence,
     signal_usdtd_risk_off_short,
 )
-from data_loaders.oi_history import build_oi_panel_recent
+from data_loaders.oi_history import INTERVAL_HOURS, build_oi_panel_recent
 
 # Live playbook: K primary, I secondary (no G on H1/H4)
 LIVE_SCENARIOS = [
@@ -93,6 +93,20 @@ def _fmt_bar(ts, interval: str) -> str:
     return t.strftime("%Y-%m-%d %H:%M")
 
 
+def _drop_forming_bar(df: "pd.DataFrame", interval: str) -> "pd.DataFrame":
+    """Drop last row when the exchange kline is still open (not yet closed)."""
+    if len(df) < 2:
+        return df
+    hours = INTERVAL_HOURS.get(interval, 1)
+    now = pd.Timestamp.now(tz="UTC")
+    last_open = pd.Timestamp(df.iloc[-1]["date"])
+    if last_open.tzinfo is None:
+        last_open = last_open.tz_localize("UTC")
+    if now < last_open + pd.Timedelta(hours=hours):
+        return df.iloc[:-1].reset_index(drop=True)
+    return df
+
+
 def _levels(close: float, side: str, tp_pct: float, sl_pct: float) -> tuple[float, float, float]:
     entry = close
     if side == "long":
@@ -133,6 +147,7 @@ def scan_oi_live(
     if "usdt_d" in df.columns and df["usdt_d"].notna().sum() > 50:
         need.append("usdt_d_z_30")
     df = df.dropna(subset=[c for c in need if c in df.columns]).reset_index(drop=True)
+    df = _drop_forming_bar(df, interval)
     if len(df) < 20:
         return OiAlert(
             symbol=symbol,

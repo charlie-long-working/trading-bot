@@ -5,8 +5,8 @@ name: OI Telegram Alerts
 
 on:
   schedule:
-    # ~5 min after each UTC hour candle close
-    - cron: "5 * * * *"
+    # Schedule :35 UTC; GHA queue often ~30 min late → actual run ~:05 next hour (after candle close)
+    - cron: "35 * * * *"
   workflow_dispatch:
     inputs:
       interval:
