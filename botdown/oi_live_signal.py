@@ -8,6 +8,7 @@ Not investment advice.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 try:
@@ -50,6 +51,18 @@ SCENARIO_WHY = {
     ),
 }
 
+_VN = timezone(timedelta(hours=7))
+
+
+def _now_signal_stamp() -> str:
+    """UTC + VN wall times when the bot produced the alert."""
+    utc = datetime.now(timezone.utc)
+    vn = utc.astimezone(_VN)
+    return (
+        f"{utc.strftime('%Y-%m-%d %H:%M:%S')} UTC "
+        f"/ {vn.strftime('%Y-%m-%d %H:%M:%S')} VN"
+    )
+
 
 @dataclass
 class OiAlert:
@@ -66,6 +79,8 @@ class OiAlert:
     target: Optional[float] = None
     features: Dict[str, Any] = field(default_factory=dict)
     liq: Optional[Dict[str, Any]] = None
+    # When the scanner ran / emitted the signal (not the candle open)
+    signal_at: str = ""
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -107,6 +122,7 @@ def scan_oi_live(
     bpd = int(cfg["bars_per_day"])
     tp, sl = float(cfg["tp"]), float(cfg["sl"])
     n_bars = lookback_bars or DEFAULT_LOOKBACK.get(interval, 800)
+    signal_at = _now_signal_stamp()
 
     if panel is None:
         panel = build_oi_panel_recent(symbol, interval=interval, lookback_bars=n_bars)
@@ -125,6 +141,7 @@ def scan_oi_live(
             bar_time="",
             close=0.0,
             features={"error": "insufficient_bars", "n": len(df)},
+            signal_at=signal_at,
         )
 
     row = df.iloc[-1]
@@ -201,6 +218,7 @@ def scan_oi_live(
         target=round(target, 2) if target is not None else None,
         features=feats,
         liq=liq_summary,
+        signal_at=signal_at,
     )
 
 
@@ -216,6 +234,7 @@ def format_oi_telegram(alert: OiAlert) -> Optional[str]:
     tp_pct = float(alert.tp_pct or 0.0)
     sl_pct = float(alert.sl_pct or 0.0)
     rr = (tp_pct / sl_pct) if sl_pct else 0.0
+    signal_at = alert.signal_at or _now_signal_stamp()
 
     if alert.side == "long":
         stop = entry * (1.0 - sl_pct)
@@ -239,10 +258,13 @@ def format_oi_telegram(alert: OiAlert) -> Optional[str]:
 
     lines = [
         f"<b>{tag}</b> {alert.symbol} · <b>{alert.interval}</b>",
-        f"Bar: <code>{alert.bar_time}</code>",
+        "",
+        "<b>Thời gian</b>",
+        f"Nến trigger (open): <code>{alert.bar_time}</code> UTC",
+        f"Bot nhận data / ra tín hiệu: <code>{signal_at}</code>",
         "",
         "<b>Kế hoạch lệnh</b>",
-        f"Entry: <code>{entry:,.2f}</code> (≈ close)",
+        f"Giá vào (entry): <code>{entry:,.2f}</code> (≈ close nến trigger)",
         f"SL: <code>{stop:,.2f}</code> ({sl_note})",
         f"TP: <code>{target:,.2f}</code> ({tp_note})",
         f"R:R {rr:.2f}:1 · bảng TF {alert.interval}: TP {tp_pct*100:.1f}% / SL {sl_pct*100:.1f}%",
