@@ -152,7 +152,29 @@ COUNT="$(git -C "$WT" rev-list --count HEAD)"
 NEW_SHA="$(git -C "$WT" rev-parse HEAD)"
 log "commit $NEW_SHA ($MSG)"
 
-# ---- 7. push gh-pages only ----
+# ---- 7. last-chance leak grep over everything about to be pushed (files + commit message) ----
+LEAK_PATTERNS=("/Users/" "/home/" "$HOME")
+for ident in "$(id -un)" "$(hostname -s 2>/dev/null || true)" "$(scutil --get ComputerName 2>/dev/null || true)" \
+             "$(git config --global user.email 2>/dev/null || true)"; do
+  [[ ${#ident} -ge 3 && "$ident" != *@users.noreply.github.com ]] && LEAK_PATTERNS+=("$ident")
+done
+SCAN="$(mktemp -d)"
+git -C "$WT" log -1 --format='%an%n%ae%n%cn%n%ce%n%B' >"$SCAN/commit.txt"
+git -C "$WT" archive HEAD | tar -x -C "$SCAN"
+for pat in "${LEAK_PATTERNS[@]}"; do
+  if grep -rqiF -- "$pat" "$SCAN"; then
+    rm -rf "$SCAN"
+    die "leak grep matched a local identity/path pattern in the gh-pages commit (not pushed)"
+  fi
+done
+if grep -rqE '[0-9]{6,12}:[A-Za-z0-9_-]{30,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_|sk-[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY' "$SCAN"; then
+  rm -rf "$SCAN"
+  die "leak grep matched a token/key pattern in the gh-pages commit (not pushed)"
+fi
+rm -rf "$SCAN"
+log "leak grep: clean"
+
+# ---- 8. push gh-pages only ----
 if [[ "$PUSH" == 0 ]]; then
   log "--no-push: stop before push"
   exit 0
