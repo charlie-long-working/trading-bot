@@ -30,13 +30,7 @@ if str(_ROOT) not in sys.path:
 
 import streamlit as st
 
-from botdown.oi_liq_strategy import TF_DEFAULTS
-from botdown.oi_live_signal import (
-    LIVE_SCENARIOS,
-    SCENARIO_WHY,
-    format_oi_telegram,
-    scan_oi_live,
-)
+from botdown.oi_snapshot import playbook_data, scan_one, summary_rows
 
 st.set_page_config(
     page_title="OI Playbook Live",
@@ -59,83 +53,40 @@ st.markdown(
 
 
 def _playbook_panel() -> None:
+    pb = playbook_data()
     st.header("Strategy đang apply (live)")
-    st.caption(
-        "GitHub Actions · `oi-telegram-alerts.yml` · "
-        "`python -m botdown.run_oi_telegram --interval auto` · symbols BTCUSDT, ETHUSDT"
-    )
+    st.caption(pb["caption"])
 
     c1, c2, c3 = st.columns(3)
     with c1:
         st.subheader("Scenarios")
-        for name, desc, _ in LIVE_SCENARIOS:
-            st.markdown(f"**`{name}`**")
-            st.write(desc)
-            why = SCENARIO_WHY.get(name, "")
-            if why:
-                st.caption(why)
+        for sc in pb["scenarios"]:
+            st.markdown(f"**`{sc['name']}`**")
+            st.write(sc["desc"])
+            if sc["why"]:
+                st.caption(sc["why"])
             st.divider()
     with c2:
         st.subheader("Exit (theo TF)")
-        rows = []
-        for tf, cfg in TF_DEFAULTS.items():
-            if tf == "1d":
-                continue  # live chỉ H1/H4
-            rows.append(
-                {
-                    "TF": tf,
-                    "TP %": f"{cfg['tp']*100:.1f}",
-                    "SL %": f"{cfg['sl']*100:.1f}",
-                    "R:R": f"{cfg['tp']/cfg['sl']:.2f}",
-                    "Max hold (bars)": cfg["max_hold"],
-                }
-            )
+        rows = [
+            {
+                "TF": ex["tf"],
+                "TP %": f"{ex['tp_pct']:.1f}",
+                "SL %": f"{ex['sl_pct']:.1f}",
+                "R:R": f"{ex['rr']:.2f}",
+                "Max hold (bars)": ex["max_hold_bars"],
+            }
+            for ex in pb["exits"]
+        ]
         st.dataframe(rows, hide_index=True, use_container_width=True)
-        st.caption("Entry ≈ close nến vừa đóng. SL/TP tính từ entry.")
+        st.caption(pb["exit_note"])
     with c3:
         st.subheader("Ops")
-        st.markdown(
-            """
-            - Cron: mỗi giờ UTC `:05`
-            - `auto`: luôn **1h**; thêm **4h** khi `UTC hour % 4 == 0`
-            - Chỉ Telegram khi side ≠ `none`
-            - GHA dùng `--no-liq`
-            - Ưu tiên scenario **K** nếu cả K và I cùng fire
-            """
-        )
+        st.markdown("\n".join(f"- {line}" for line in pb["ops"]))
 
 
-def _scan_one(symbol: str, interval: str, lookback: int) -> dict:
-    try:
-        alert = scan_oi_live(
-            symbol,
-            interval=interval,
-            lookback_bars=lookback,
-            include_liq=False,
-        )
-        d = alert.as_dict()
-        d["telegram_preview"] = format_oi_telegram(alert)
-        d["ok"] = True
-        d["error"] = None
-        return d
-    except Exception as e:
-        return {
-            "symbol": symbol,
-            "interval": interval,
-            "side": "error",
-            "ok": False,
-            "error": str(e),
-            "features": {},
-            "scenarios": [],
-            "telegram_preview": None,
-            "bar_time": "",
-            "close": 0,
-            "entry": None,
-            "stop": None,
-            "target": None,
-            "tp_pct": 0,
-            "sl_pct": 0,
-        }
+# Pure scan lives in botdown/oi_snapshot.py (shared with the static web exporter).
+_scan_one = scan_one
 
 
 def _signal_card(d: dict) -> None:
@@ -244,19 +195,7 @@ def main() -> None:
     progress.empty()
 
     # Summary table
-    summary = [
-        {
-            "Symbol": r.get("symbol"),
-            "TF": r.get("interval"),
-            "Side": r.get("side"),
-            "Bar": r.get("bar_time"),
-            "Entry": r.get("entry") or r.get("close"),
-            "SL": r.get("stop"),
-            "TP": r.get("target"),
-            "Scenarios": ", ".join(s.get("scenario", "") for s in (r.get("scenarios") or [])),
-        }
-        for r in results
-    ]
+    summary = summary_rows(results)
     st.subheader("Tóm tắt")
     st.dataframe(summary, hide_index=True, use_container_width=True)
 

@@ -16,3 +16,7 @@ archive/botv2/data/cache/
 # Docker
 .docker/
 *.log
+
+# Static web (GitHub Pages): local history, gh-pages worktree, generated data
+/var/
+/web/data/*.json
