@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent: export the OI playbook snapshot and publish it to gh-pages every 15 minutes.
+
+  Install (replace /ABS/PATH/TO/Trading-bot with your checkout, e.g. via sed):
+    sed "s#/ABS/PATH/TO/Trading-bot#$PWD#g" deploy/com.tradingbot.static.plist.example \
+      > ~/Library/LaunchAgents/com.tradingbot.static.plist
+    plutil -lint ~/Library/LaunchAgents/com.tradingbot.static.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.tradingbot.static.plist
+    launchctl kickstart -k gui/$(id -u)/com.tradingbot.static      # run once now
+
+  Stop / remove:
+    launchctl bootout gui/$(id -u)/com.tradingbot.static
+    rm ~/Library/LaunchAgents/com.tradingbot.static.plist
+
+  Status / log:
+    launchctl print gui/$(id -u)/com.tradingbot.static | grep -E 'state|last exit'
+    tail -f ~/Library/Logs/trading-bot-static.log
+
+  To follow the OI alert cadence instead (:35 each hour), replace StartInterval with:
+    <key>StartCalendarInterval</key><dict><key>Minute</key><integer>35</integer></dict>
+  and export STATIC_REFRESH_MINUTES=60 below so the web's "data cũ" banner uses a 60-minute cycle.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.tradingbot.static</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>/ABS/PATH/TO/Trading-bot/scripts/publish_static.sh</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/ABS/PATH/TO/Trading-bot</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<key>PYTHONUNBUFFERED</key>
+		<string>1</string>
+		<key>STATIC_REFRESH_MINUTES</key>
+		<string>15</string>
+	</dict>
+	<key>StartInterval</key>
+	<integer>900</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>LowPriorityIO</key>
+	<true/>
+	<!-- Only catches errors before the script redirects its own output (e.g. permission denied). -->
+	<key>StandardOutPath</key>
+	<string>/tmp/com.tradingbot.static.out</string>
+	<key>StandardErrorPath</key>
+	<string>/tmp/com.tradingbot.static.err</string>
+</dict>
+</plist>

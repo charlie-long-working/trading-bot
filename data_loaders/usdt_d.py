@@ -33,6 +33,8 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE_DIR = ROOT / "data" / "macro"
+STALE_DAYS = 2  # cache older than this (last row) is refreshed
+REFRESH_COOLDOWN_H = 6  # ...but not more often than this
 BINANCE_FAPI = "https://fapi.binance.com"
 BINANCE_SPOT = "https://api.binance.com"
 BINANCE_DATA = "https://data-api.binance.vision"
@@ -187,13 +189,40 @@ def build_usdt_d_daily(
         raise RuntimeError("pip install pandas numpy")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path = CACHE_DIR / "usdt_d_daily.csv"
+    fetch_start = start  # refresh keeps the full cached range, return stays at `start`
+    stale_fallback = None
     if cache_path.exists() and not force_refresh:
         cached = pd.read_csv(cache_path, parse_dates=["date"])
-        if len(cached) > 100 and cached["date"].min() <= pd.Timestamp(start):
+        covers_start = len(cached) > 100 and cached["date"].min() <= pd.Timestamp(start)
+        # Stale cache (last row > STALE_DAYS old) made live scans see a flat USDT.D
+        # (z = NaN → every bar dropped). Refresh it, but at most once per
+        # REFRESH_COOLDOWN_H so a lagging upstream doesn't trigger a refetch every run.
+        last = cached["date"].max() if len(cached) else pd.Timestamp("1970-01-01")
+        stale = last < pd.Timestamp.now().normalize() - pd.Timedelta(days=STALE_DAYS)
+        age_h = (time.time() - cache_path.stat().st_mtime) / 3600.0
+        if covers_start and (not stale or age_h < REFRESH_COOLDOWN_H):
             return cached[cached["date"] >= pd.Timestamp(start)].reset_index(drop=True)
+        if covers_start and stale:
+            print(f"[usdt_d] cache stale (last {last.date()}) → refresh")
+            stale_fallback = cached[cached["date"] >= pd.Timestamp(start)].reset_index(drop=True)
+            fetch_start = min(pd.Timestamp(start), cached["date"].min()).strftime("%Y-%m-%d")
 
+    try:
+        out = _fetch_usdt_d_daily(fetch_start)
+    except Exception as e:
+        if stale_fallback is None:
+            raise
+        print(f"[usdt_d] refresh failed ({type(e).__name__}: {e}); using stale cache")
+        cache_path.touch()  # start the cooldown so we don't refetch on every scan
+        return stale_fallback
+    out.to_csv(cache_path, index=False)
+    return out[out["date"] >= pd.Timestamp(start)].reset_index(drop=True)
+
+
+def _fetch_usdt_d_daily(fetch_start: str) -> "pd.DataFrame":
+    """Network build of the daily USDT.D panel from `fetch_start` (no cache I/O)."""
     usdt = fetch_usdt_mcap_llama()
-    usdt = usdt[usdt["date"] >= pd.Timestamp(start)].copy()
+    usdt = usdt[usdt["date"] >= pd.Timestamp(fetch_start)].copy()
 
     try:
         cmc = fetch_cmc_total_mcap()
@@ -201,8 +230,8 @@ def build_usdt_d_daily(
         print(f"[usdt_d] CMC failed: {e}")
         cmc = pd.DataFrame(columns=["date", "total_mcap", "btc_dominance", "eth_dominance"])
 
-    btc = fetch_binance_close_daily("BTCUSDT", start=start).rename(columns={"close": "btc_close"})
-    eth = fetch_binance_close_daily("ETHUSDT", start=start).rename(columns={"close": "eth_close"})
+    btc = fetch_binance_close_daily("BTCUSDT", start=fetch_start).rename(columns={"close": "btc_close"})
+    eth = fetch_binance_close_daily("ETHUSDT", start=fetch_start).rename(columns={"close": "eth_close"})
 
     panel = usdt.merge(btc, on="date", how="left").merge(eth, on="date", how="left")
     if len(cmc):
@@ -249,5 +278,4 @@ def build_usdt_d_daily(
     out = out.dropna(subset=["usdt_d"]).sort_values("date").reset_index(drop=True)
     if out.empty:
         raise RuntimeError("USDT.D series empty (llama/CMC/spot all failed)")
-    out.to_csv(cache_path, index=False)
-    return out[out["date"] >= pd.Timestamp(start)].reset_index(drop=True)
+    return out

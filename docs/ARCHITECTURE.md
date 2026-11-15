@@ -49,9 +49,18 @@ Crypto-only. VN equities → `../stock`. VRE / property → `../real-estate`.
 | MACD % TP/SL BT | `botdown/engine_macd_rsi_bt.py` |
 | OI scenarios A–K | `botdown/oi_liq_strategy.py` |
 | Live I/K message | `botdown/oi_live_signal.py` |
+| Live playbook data (Streamlit + static web) | `botdown/oi_snapshot.py` |
+| Static snapshot allowlist / sanitize / privacy check | `botdown/static_snapshot.py` |
 | GHA-safe OI panel | `data_loaders/oi_history.py` |
 | USDT.D | `data_loaders/usdt_d.py` |
 | Agent playbook | `.cursor/skills/trading-bot/SKILL.md` |
+
+## Static web (GitHub Pages)
+
+`scripts/publish_static.sh` (launchd, local Mac) → `scripts/export_static_snapshot.py` → `botdown/oi_snapshot.scan_all` →
+`botdown/static_snapshot.build_snapshot` (allowlist + sanitize) → `web/data/latest.json` → privacy test →
+rsync `web/` into detached worktree `var/gh-pages-wt` → amend single commit → `git push --force-with-lease origin <sha>:gh-pages`.
+`web/` (HTML/CSS/JS) is fixed; only `data/latest.json` changes. History: `var/static-history/` (local, gitignored).
 
 ## Anti-debt rules
 
