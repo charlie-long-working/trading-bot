@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone, timedelta
+from html import escape as _h
 from typing import Any, Dict, List, Optional
 
 try:
@@ -267,16 +268,17 @@ def format_oi_telegram(alert: OiAlert) -> Optional[str]:
         name = a.get("scenario", "")
         desc = a.get("desc") or SCENARIO_WHY.get(name, "")
         why = SCENARIO_WHY.get(name, "")
-        scen_blocks.append(f"• <code>{name}</code> — {desc}")
+        # parse_mode=HTML: rule text has bare "<" (e.g. "Δ3d<-0.2") → must escape or Telegram 400s
+        scen_blocks.append(f"• <code>{_h(name)}</code> — {_h(desc)}")
         if why:
-            scen_blocks.append(f"  → {why}")
+            scen_blocks.append(f"  → {_h(why)}")
 
     lines = [
-        f"<b>{tag}</b> {alert.symbol} · <b>{alert.interval}</b>",
+        f"<b>{tag}</b> {_h(alert.symbol)} · <b>{_h(alert.interval)}</b>",
         "",
         "<b>Thời gian</b>",
-        f"Nến trigger (open): <code>{alert.bar_time}</code> UTC",
-        f"Bot nhận data / ra tín hiệu: <code>{signal_at}</code>",
+        f"Nến trigger (open): <code>{_h(str(alert.bar_time))}</code> UTC",
+        f"Bot nhận data / ra tín hiệu: <code>{_h(signal_at)}</code>",
         "",
         "<b>Kế hoạch lệnh</b>",
         f"Giá vào (entry): <code>{entry:,.2f}</code> (≈ close nến trigger)",
@@ -293,9 +295,10 @@ def format_oi_telegram(alert: OiAlert) -> Optional[str]:
     lines.extend([
         "",
         "<b>Snapshot</b>",
-        f"OI Δ3d: {f.get('oi_chg_3_pct')}% | z30: {f.get('oi_z_30')} | fund z: {f.get('funding_z_30')}",
-        f"USDT.D: {f.get('usdt_d')}% (Δ3d {f.get('usdt_d_chg_3')}, z {f.get('usdt_d_z_30')})",
-        f"EMA: <b>{f.get('regime_ema')}</b> | risk-off={f.get('usdtd_risk_off')} risk-on={f.get('usdtd_risk_on')}",
+        _h(f"OI Δ3d: {f.get('oi_chg_3_pct')}% | z30: {f.get('oi_z_30')} | fund z: {f.get('funding_z_30')}"),
+        _h(f"USDT.D: {f.get('usdt_d')}% (Δ3d {f.get('usdt_d_chg_3')}, z {f.get('usdt_d_z_30')})"),
+        f"EMA: <b>{_h(str(f.get('regime_ema')))}</b> | "
+        + _h(f"risk-off={f.get('usdtd_risk_off')} risk-on={f.get('usdtd_risk_on')}"),
         "",
         "<i>ALERT ONLY — not investment advice. Playbook I+K H1/H4.</i>",
     ])
