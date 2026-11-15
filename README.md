@@ -46,7 +46,7 @@ python -m botdown.run_backtest_macd_rsi --interval 1d --exit pct --tp-pct 0.10 -
 | `notify/` | Telegram |
 | `data/` | Caches |
 | `archive/` | Legacy (botv2, old dashboard/webhooks) — do not extend |
-| `.github/workflows/oi-telegram-alerts.yml` | OI → Telegram, cron :45 UTC (đang disabled — xem AGENTS.md) |
+| `.github/workflows/oi-telegram-alerts.yml` | OI → Telegram, cron :45 UTC (GitHub giãn ~5 lần/ngày) |
 
 ## Secrets (GHA)
 

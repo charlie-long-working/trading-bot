@@ -26,8 +26,8 @@ OI playbook math → skill `crypto-oi-usdtd`. VN → `vn-stock`. Vàng/bạc →
 
 ## Trạng thái (15/11/2026)
 
-- **OI alerts tắt**: workflow `oi-telegram-alerts.yml` bị GitHub `disabled_inactivity` (lần chạy cuối 2026-10-22). Khi chạy, cron `45 * * * *` bị giãn còn ~5 lần/ngày.
-- **Cảnh báo kịch bản K không gửi được**: `SCENARIO_WHY` có `<` thô → Telegram HTML 400. Job vẫn báo xanh.
+- OI alerts **bật lại 15/11/2026** (bị `disabled_inactivity` 22/10–15/11). Repo public: 60 ngày không push GitHub lại tắt — bật bằng `gh workflow enable oi-telegram-alerts.yml`. Cron `45 * * * *` bị giãn còn ~5 lần/ngày.
+- Đã sửa 15/11 (`9da9903`): text Telegram được `html.escape` — trước đó cảnh báo K bị Telegram từ chối (`<` thô) mà job vẫn xanh. Thêm text mới vào tin HTML thì luôn escape.
 - Cache local cũ: `data/macro/usdt_d_daily.csv` dừng 2026-08-22 và loader không kiểm tra ngày cuối → scan local (dashboard, `run_oi_telegram` trên máy) dùng USDT.D phẳng. GHA không bị vì mỗi lần chạy không có cache.
 - `run_okx_bot._size_to_sz` làm tròn số hợp đồng về 0 với `--size-usdt 100` (BTC/ETH); cần khoá OKX kể cả `--paper`.
 - Dockerfile hỏng (CMD trỏ `dashboard.app` đã chuyển vào `archive/`).

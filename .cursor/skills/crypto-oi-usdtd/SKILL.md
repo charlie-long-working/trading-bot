@@ -53,8 +53,8 @@ python3 -m botdown.run_consensus_crypto --dry-run
 **GitHub Actions** (no VPS needed for alerts): workflow `.github/workflows/oi-telegram-alerts.yml`
 
 - Cron: `45 * * * *` UTC (= :45 giờ VN). GitHub giãn lịch → thực tế ~5 lần/ngày, nhiều nến 1h không được quét; 4h chỉ chạy khi lần chạy rơi vào giờ UTC chia hết cho 4.
-- **Trạng thái 15/11/2026: workflow `disabled_inactivity`** (repo public, 60 ngày không có push) — lần chạy cuối 2026-10-22. Bật lại: `gh workflow enable oi-telegram-alerts.yml` hoặc push một commit.
-- **Lỗi đã biết:** text giải thích kịch bản K trong `SCENARIO_WHY` (`botdown/oi_live_signal.py`) chứa `<` thô (`Δ3d<-0.2`, `z<-1`) → Telegram (parse_mode HTML) trả 400, cảnh báo có K **không được gửi**; job vẫn xanh. Cần `html.escape`.
+- Workflow bị `disabled_inactivity` 22/10–15/11/2026, đã bật lại. Repo public 60 ngày không push sẽ bị tắt nữa → `gh workflow enable oi-telegram-alerts.yml`.
+- Đã sửa 15/11/2026: `format_oi_telegram` escape HTML (trước đó cảnh báo có K bị Telegram từ chối vì `<` thô trong `SCENARIO_WHY`).
 - GHA chạy với `--no-liq`.
 - Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 - `workflow_dispatch` for manual / dry-run.
@@ -74,7 +74,7 @@ HTTP: loaders use **urllib + ProxyHandler({})** (avoid env proxy 403). Live `bui
 | `botdown/run_oi_scenarios.py` | CLI + markdown/json reports |
 | `botdown/run_oi_telegram.py` | Telegram alerts + dedupe |
 | `botdown/crypto_consensus.py` | Adds vote `liquidation_map` (not kill-registry) |
-| `.github/workflows/oi-telegram-alerts.yml` | Cron :45 UTC → Telegram (đang disabled) |
+| `.github/workflows/oi-telegram-alerts.yml` | Cron :45 UTC → Telegram |
 
 ## Reports (read these first)
 

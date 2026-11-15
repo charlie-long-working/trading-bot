@@ -6,4 +6,4 @@
 - Prefer updating `docs/ARCHITECTURE.md` when adding SoT modules or entrypoints.
 - Repo **public**: không commit `.env`, khoá API.
 - `stock`, `precious-metals`, `real-estate` import code từ `botdown/` và `data_loaders/` — đổi tên/chữ ký hàm thì sửa cả các repo đó.
-- Trạng thái 15/11/2026: workflow OI alerts `disabled_inactivity`; cảnh báo kịch bản K lỗi HTML khi gửi Telegram (chi tiết trong skill `trading-bot`).
+- Workflow OI alerts: repo public 60 ngày không push GitHub tự tắt → `gh workflow enable oi-telegram-alerts.yml`. Tin Telegram dùng HTML: luôn escape text động.

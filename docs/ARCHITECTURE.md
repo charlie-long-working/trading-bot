@@ -36,7 +36,7 @@ Crypto-only. VN equities → `../stock`. VRE / property → `../real-estate`.
 
 ## Data flow — OI Telegram (cron :45 UTC, GitHub giãn ~5 lần/ngày)
 
-1. GHA cron `45 * * * *` UTC (workflow đang `disabled_inactivity` từ 2026-10-22) → `python -m botdown.run_oi_telegram --interval auto --no-liq`
+1. GHA cron `45 * * * *` UTC → `python -m botdown.run_oi_telegram --interval auto --no-liq`
 2. `build_oi_panel_recent` — klines: spot/vision → Bybit → fapi; OI: Bybit → BN → Gate
 3. `enrich_features` + live I/K only (`oi_live_signal`)
 4. Format entry/SL/TP from TF table → `notify.telegram`
