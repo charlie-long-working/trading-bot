@@ -28,8 +28,15 @@
 	<string>com.tradingbot.static</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/bin/bash</string>
-		<string>/ABS/PATH/TO/Trading-bot/scripts/publish_static.sh</string>
+		<!--
+		  Launched through the repo's .venv Python, not /bin/bash directly: macOS privacy (TCC)
+		  blocks a launchd-started /bin/bash from reading ~/Documents ("Operation not permitted"),
+		  while the Homebrew Python behind .venv usually already has that access (other local jobs
+		  use it). bash runs as Python's child and inherits the access.
+		-->
+		<string>/ABS/PATH/TO/Trading-bot/.venv/bin/python</string>
+		<string>-c</string>
+		<string>import subprocess, sys; sys.exit(subprocess.call(["/bin/bash", "/ABS/PATH/TO/Trading-bot/scripts/publish_static.sh"]))</string>
 	</array>
 	<key>WorkingDirectory</key>
 	<string>/ABS/PATH/TO/Trading-bot</string>

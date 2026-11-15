@@ -100,7 +100,7 @@ launchctl bootout gui/$(id -u)/com.tradingbot.static                            
 ```
 
 Mặc định 15 phút (`StartInterval` 900). Muốn khớp nhịp OI alert (:35 mỗi giờ) thì đổi sang `StartCalendarInterval` Minute 35 và `STATIC_REFRESH_MINUTES=60` (hướng dẫn trong file plist).
-Nếu log báo `Operation not permitted` khi đọc `~/Documents`, cấp Full Disk Access cho `/bin/bash` (System Settings → Privacy & Security). Push dùng SSH remote `origin`, nên key phải dùng được không cần nhập passphrase (ssh-agent/Keychain).
+Plist gọi script qua `.venv/bin/python` (không gọi thẳng `/bin/bash`): macOS chặn `/bin/bash` do launchd khởi chạy đọc `~/Documents` (`Operation not permitted`), còn Python Homebrew sau `.venv` thường đã có quyền này. Nếu vẫn bị chặn, xem `/tmp/com.tradingbot.static.err` và cấp quyền Documents/Full Disk Access cho binary Python đó. Nên trỏ plist vào một checkout ổn định (không phải worktree tạm sẽ bị dọn). Push dùng SSH remote `origin`, nên key phải dùng được không cần nhập passphrase (ssh-agent/Keychain).
 
 ### Xoá lịch sử local
 
