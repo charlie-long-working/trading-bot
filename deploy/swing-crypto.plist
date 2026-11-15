@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+		<key>PYTHONPATH</key>
+		<string>/Users/namnguyen/Documents/Cursor/Trading-bot</string>
+		<key>PYTHONUNBUFFERED</key>
+		<string>1</string>
+		<key>TZ</key>
+		<string>Asia/Ho_Chi_Minh</string>
+	</dict>
+	<key>Label</key>
+	<string>com.cursor.swing-crypto</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/namnguyen/Documents/Cursor/Trading-bot/.venv/bin/python</string>
+		<string>-W</string>
+		<string>ignore</string>
+		<string>-m</string>
+		<string>botdown.run_swing_signals</string>
+		<string>--heartbeat</string>
+	</array>
+	<key>StandardErrorPath</key>
+	<string>/Users/namnguyen/Library/Logs/swing/crypto.log</string>
+	<key>StandardOutPath</key>
+	<string>/Users/namnguyen/Library/Logs/swing/crypto.log</string>
+	<key>StartCalendarInterval</key>
+	<array>
+		<dict>
+			<key>Hour</key>
+			<integer>7</integer>
+			<key>Minute</key>
+			<integer>10</integer>
+		</dict>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/namnguyen/Documents/Cursor/Trading-bot</string>
+</dict>
+</plist>

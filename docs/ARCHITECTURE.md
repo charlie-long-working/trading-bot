@@ -34,6 +34,10 @@ Crypto-only. VN equities → `../stock`. VRE / property → `../real-estate`.
 | `archive/` | Legacy botv2/dashboard/old webhooks | New production code |
 | `crawler/` + `backtest/` | Offline vision ZIP + old fusion BT | Prefer botdown for new BT |
 
+## Data flow — Swing 1D/1W (local launchd)
+
+`com.cursor.swing-crypto` 07:10 VN → `botdown/run_swing_signals.py` → `build_oi_panel_recent(1d)` + `enrich_features` → G/K/I (edge-trigger) + MACD+RSI → `botdown/swing_common.py` (format, xu hướng tuần, dedupe `data/swing/swing_sent.json`) → `notify.telegram`. `swing_common` cũng được `stock` và `precious-metals` import.
+
 ## Data flow — OI Telegram (cron :45 UTC, GitHub giãn ~5 lần/ngày)
 
 1. GHA cron `45 * * * *` UTC → `python -m botdown.run_oi_telegram --interval auto --no-liq`

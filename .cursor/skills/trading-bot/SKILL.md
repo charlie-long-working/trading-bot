@@ -26,6 +26,8 @@ OI playbook math → skill `crypto-oi-usdtd`. VN → `vn-stock`. Vàng/bạc →
 
 ## Trạng thái (15/11/2026)
 
+- **Swing 1D/1W chạy local**: launchd `com.cursor.swing-crypto` 07:10 VN hằng ngày → `botdown/run_swing_signals.py` (OI G/K/I trên nến ngày đã đóng, TP8/SL3/10 nến, chỉ báo khi kịch bản vừa bật + MACD+RSI pct EMA) + bản tin xu hướng tuần BTC/ETH. Module chung cho cả stock/precious-metals: `botdown/swing_common.py` (đổi API thì sửa 3 repo). Log `~/Library/Logs/swing/crypto.log`, dedupe `data/swing/swing_sent.json`. H1/H4 vẫn ở GitHub Actions.
+
 - OI alerts **bật lại 15/11/2026** (bị `disabled_inactivity` 22/10–15/11). Repo public: 60 ngày không push GitHub lại tắt — bật bằng `gh workflow enable oi-telegram-alerts.yml`. Cron `45 * * * *` bị giãn còn ~5 lần/ngày.
 - Đã sửa 15/11 (`9da9903`): text Telegram được `html.escape` — trước đó cảnh báo K bị Telegram từ chối (`<` thô) mà job vẫn xanh. Thêm text mới vào tin HTML thì luôn escape.
 - Cache local cũ: `data/macro/usdt_d_daily.csv` dừng 2026-08-22 và loader không kiểm tra ngày cuối → scan local (dashboard, `run_oi_telegram` trên máy) dùng USDT.D phẳng. GHA không bị vì mỗi lần chạy không có cache.

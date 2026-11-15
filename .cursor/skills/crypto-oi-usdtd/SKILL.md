@@ -43,6 +43,12 @@ python3 -m botdown.run_oi_telegram --interval 4h --force
 python3 -m botdown.run_consensus_crypto --dry-run
 ```
 
+### Live swing 1D (local, Telegram)
+
+- `python -m botdown.run_swing_signals [--dry-run] [--heartbeat] [--weekly-only|--daily-only]` — launchd `com.cursor.swing-crypto` 07:10 VN.
+- G_regime_crowdfade + K + I trên nến ngày đã đóng, TP 8% / SL 3% / giữ 10 nến; **edge-trigger** (chỉ báo khi kịch bản vừa bật, vì I là trạng thái kéo dài). Kèm MACD+RSI pct TP10/SL4 + EMA.
+- Bằng chứng (in-sample 2022–08/2026): BTC G 29 lệnh PF 1,83; K 50 lệnh PF 1,63 (chỉ tốt từ 2024); I yếu. Không có kết quả 1W → bản tin tuần chỉ là bối cảnh.
+
 ### Live playbook H1/H4 (Telegram)
 
 - Strategies: **`K_oi_usdtd_confluence`** (primary) + **`I_usdtd_risk_off_short`**. No `G` on H1/H4 live.
