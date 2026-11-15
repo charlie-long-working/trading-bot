@@ -216,9 +216,24 @@ def format_weekly(title: str, rows: Iterable[tuple], footer: Optional[str] = Non
     return "\n".join(lines)
 
 
+def _split_block(b: str) -> List[str]:
+    """Oversized block → pieces at line boundaries (a single line is never cut)."""
+    if len(b) <= TG_LIMIT:
+        return [b]
+    pieces, buf = [], ""
+    for line in b.split("\n"):
+        if buf and len(buf) + len(line) + 1 > TG_LIMIT:
+            pieces.append(buf)
+            buf = line
+        else:
+            buf = f"{buf}\n{line}" if buf else line
+    pieces.append(buf)
+    return pieces
+
+
 def split_messages(blocks: List[str], header: str = "") -> List[str]:
     msgs, cur = [], header
-    for b in blocks:
+    for b in (p for blk in blocks for p in _split_block(blk)):
         if cur and len(cur) + len(b) + 2 > TG_LIMIT:
             msgs.append(cur)
             cur = b

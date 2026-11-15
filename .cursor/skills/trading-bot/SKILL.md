@@ -74,3 +74,9 @@ gh workflow list ; gh run list --limit 10
 GHA run → `run_oi_telegram` → `build_oi_panel_recent` (nguồn: vision klines / Gate OI / Gate funding) → `enrich_features` → I/K → `format_oi_telegram` → `notify.telegram` (xem log `SEND FAIL`).
 
 Khi thêm entrypoint hoặc file nguồn sự thật: thêm một dòng vào `docs/ARCHITECTURE.md` và [entrypoints.md](entrypoints.md).
+
+## Tests
+
+`PYTHONPATH=. .venv/bin/python -m unittest discover -s tests -t .` — offline (synthetic OHLC, mocked network/Telegram):
+`test_swing_common.py` (weekly trend, resample, HTML escape, message split, dedupe store), `test_run_swing_signals.py`
+(edge-trigger, levels, dedupe across runs, heartbeat, failed send not stored), `test_oi_telegram_format.py` (K `<` regression).
