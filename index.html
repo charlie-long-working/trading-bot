@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Live OI playbook (I + K) cho BTCUSDT / ETHUSDT — chỉ cảnh báo, không phải lời khuyên đầu tư.">
+  <title>OI Playbook Live</title>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // Apply saved theme before paint (no flash). Storage may be blocked → ignore.
+    try { var t = localStorage.getItem("oi-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="brand">
+        <h1>OI live playbook</h1>
+        <p class="muted small" id="meta">Đang tải dữ liệu…</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn" id="refresh-btn" title="Tải lại dữ liệu">Tải lại</button>
+        <button type="button" class="btn" id="theme-btn" title="Đổi giao diện sáng/tối" aria-label="Đổi giao diện sáng/tối">Giao diện</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="banners" aria-live="polite"></div>
+
+    <section id="error-state" class="panel error-state" hidden>
+      <h2>Không tải được dữ liệu</h2>
+      <p id="error-text" class="muted"></p>
+      <button type="button" class="btn primary" id="retry-btn">Thử lại</button>
+    </section>
+
+    <section id="playbook" class="section" hidden>
+      <h2>Strategy đang apply (live)</h2>
+      <p class="muted small" id="pb-caption"></p>
+      <div class="grid-3">
+        <article class="panel">
+          <h3>Scenarios</h3>
+          <div id="pb-scenarios"></div>
+        </article>
+        <article class="panel">
+          <h3>Exit (theo TF)</h3>
+          <table class="table compact">
+            <thead><tr><th>TF</th><th class="num">TP %</th><th class="num">SL %</th><th class="num">R:R</th><th class="num">Max hold</th></tr></thead>
+            <tbody id="pb-exits"></tbody>
+          </table>
+          <p class="muted small" id="pb-exit-note"></p>
+        </article>
+        <article class="panel">
+          <h3>Ops</h3>
+          <ul id="pb-ops" class="ops"></ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="summary" class="section" hidden>
+      <div class="section-head">
+        <h2>Tóm tắt</h2>
+        <div class="filters" role="group" aria-label="Lọc">
+          <label>Symbol <select id="f-symbol"><option value="">Tất cả</option></select></label>
+          <label>TF <select id="f-tf"><option value="">Tất cả</option></select></label>
+          <label>Tín hiệu
+            <select id="f-side">
+              <option value="">Tất cả</option>
+              <option value="long">LONG</option>
+              <option value="short">SHORT</option>
+              <option value="none">none</option>
+              <option value="error">lỗi</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <table class="table summary-table">
+        <thead>
+          <tr>
+            <th data-sort="symbol" scope="col"><button type="button">Symbol</button></th>
+            <th data-sort="interval" scope="col"><button type="button">TF</button></th>
+            <th data-sort="side" scope="col"><button type="button">Tín hiệu</button></th>
+            <th data-sort="bar_time" scope="col"><button type="button">Nến (VN)</button></th>
+            <th data-sort="entry" scope="col" class="num"><button type="button">Entry</button></th>
+            <th data-sort="stop" scope="col" class="num"><button type="button">SL</button></th>
+            <th data-sort="target" scope="col" class="num"><button type="button">TP</button></th>
+            <th data-sort="scenarios" scope="col"><button type="button">Scenarios</button></th>
+          </tr>
+        </thead>
+        <tbody id="summary-body"></tbody>
+      </table>
+      <p class="muted small" id="summary-empty" hidden>Không có dòng nào khớp bộ lọc.</p>
+    </section>
+
+    <section id="details" class="section" hidden>
+      <h2>Chi tiết</h2>
+      <div id="cards" class="grid-2"></div>
+    </section>
+  </main>
+
+  <footer class="wrap footer muted small">
+    <p id="disclaimer">ALERT ONLY — not investment advice.</p>
+    <p>Giờ hiển thị theo Asia/Ho_Chi_Minh (UTC+7). Tự làm mới mỗi 5 phút. Chart: <a href="https://www.tradingview.com/lightweight-charts/" rel="noopener">TradingView Lightweight Charts</a>.</p>
+  </footer>
+
+  <template id="card-tpl">
+    <article class="panel card">
+      <header class="card-head">
+        <span class="badge"></span>
+        <h3 class="card-title"></h3>
+      </header>
+      <p class="card-msg muted small" hidden></p>
+      <dl class="metrics">
+        <div><dt>Nến (VN)</dt><dd data-k="bar"></dd></div>
+        <div><dt>Close / Entry</dt><dd data-k="entry"></dd></div>
+        <div><dt>SL</dt><dd data-k="stop"></dd></div>
+        <div><dt>TP</dt><dd data-k="target"></dd></div>
+      </dl>
+      <p class="plan muted small"></p>
+      <div class="triggers"></div>
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <span class="muted small chart-legend"></span>
+          <select class="chart-overlay" aria-label="Chuỗi phụ trên chart">
+            <option value="oi_usd">OI (USD)</option>
+            <option value="funding">Funding</option>
+            <option value="usdt_d">USDT.D %</option>
+          </select>
+        </div>
+        <div class="chart" role="img"></div>
+      </div>
+      <dl class="features"></dl>
+      <details class="preview" hidden>
+        <summary>Telegram preview</summary>
+        <pre></pre>
+      </details>
+    </article>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"
+          integrity="sha384-OK7vELvjHdhUFi31JYioPIcRHTROLdcDa6ZsNWgvgLaKj+9JqhU0Ad8g4wz3CXjA"
+          crossorigin="anonymous" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
